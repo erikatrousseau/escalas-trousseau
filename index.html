@@ -621,10 +621,11 @@ function pickDay(val,fid,empId,yr,mo,dia){
   const emp=emps.find(e=>e.id===empId);
   if(emp){
     const dias=escalaLocal[k].dias;
-    // qtd/qtdF calculated in calcTotal below
-    const rate=emp.rate_d||emp.rate_x||emp.rate_sdf||0;
-    escalaLocal[k].qtd=qtd;escalaLocal[k].qtdF=qtdF;
-    escalaLocal[k].total=qtd*rate+qtdF*(emp.rate_f||0);
+    const rates=getRates(emp,yr,mo);
+    const calc=calcTotal(dias,rates);
+    escalaLocal[k].qtd=calc.qtd;
+    escalaLocal[k].qtdF=calc.qtdF;
+    escalaLocal[k].total=calc.total;
   }
   salvarLocal();
   // Atualiza célula e totais sem rerenderizar tudo
