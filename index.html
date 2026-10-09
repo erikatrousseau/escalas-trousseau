@@ -125,8 +125,8 @@ label{font-size:11px;font-weight:600;color:var(--sub);display:block;margin-botto
     <div id="_sync_status" style="font-size:10px;opacity:.65;white-space:nowrap;flex-shrink:0"></div>
     <div style="font-size:11px;opacity:.7" id="loja-label"></div>
   </header>
-  <main>
-    <div id="main-content"></div>
+  <main id="main-content">
+    <div class="loading"><div class="loading-spinner"></div>Iniciando…</div>
   </main>
 </div>
 
@@ -134,46 +134,12 @@ label{font-size:11px;font-weight:600;color:var(--sub);display:block;margin-botto
 // ══════════════════════════════════════════════════════════════════
 // CONFIGURAÇÃO — Cole a URL do Apps Script após publicar
 // ══════════════════════════════════════════════════════════════════
-const _DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwUY3ezkWvajNCCR5slIxviHmGVxHsi7m20bbR_O9sTGgGeNPH0IA1uU7Ae-ZUIxMT0UQ/exec';
-let SCRIPT_URL = _DEFAULT_SCRIPT_URL; // sempre usa a URL padrão
-try{
-  const saved = localStorage.getItem('trousseau_script_url');
-  // Só usa o localStorage se for uma URL diferente configurada manualmente
-  if(saved && saved !== _DEFAULT_SCRIPT_URL && saved.includes('script.google.com')){
-    SCRIPT_URL = saved;
-  } else {
-    // Limpa URL antiga do localStorage
-    localStorage.removeItem('trousseau_script_url');
-  }
-}catch(e){}
+let SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwUY3ezkWvajNCCR5slIxviHmGVxHsi7m20bbR_O9sTGgGeNPH0IA1uU7Ae-ZUIxMT0UQ/exec';
 // ══════════════════════════════════════════════════════════════════
 
 const MONTHS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const MONTHS_ABR=['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
 const DAYS_PT=['seg','ter','qua','qui','sex','sáb','dom'];
-
-const LINKS_LOJAS={
-  'BV': 'https://lambent-piroshki-ac2ccb.netlify.app/?loja=BV',
-  'BSB': 'https://lambent-piroshki-ac2ccb.netlify.app/?loja=BSB',
-  'SP_CATARINA': 'https://lambent-piroshki-ac2ccb.netlify.app/?loja=SP_CATARINA',
-  'SP_CIDADE_JARDIM': 'https://lambent-piroshki-ac2ccb.netlify.app/?loja=SP_CIDADE_JARDIM',
-  'SP_GABRIEL_MONTEIRO': 'https://lambent-piroshki-ac2ccb.netlify.app/?loja=SP_GABRIEL_MONTEIRO',
-  'SP_HIGIENOPOLIS': 'https://lambent-piroshki-ac2ccb.netlify.app/?loja=SP_HIGIENOPOLIS',
-  'SP_IGT': 'https://lambent-piroshki-ac2ccb.netlify.app/?loja=SP_IGT',
-  'SP_ITUPEVA': 'https://lambent-piroshki-ac2ccb.netlify.app/?loja=SP_ITUPEVA',
-  'SP_JOAO_CACHOEIRA': 'https://lambent-piroshki-ac2ccb.netlify.app/?loja=SP_JOAO_CACHOEIRA',
-  'SP_VNC': 'https://lambent-piroshki-ac2ccb.netlify.app/?loja=SP_VNC',
-  'BH_BHB': 'https://lambent-piroshki-ac2ccb.netlify.app/?loja=BH_BHB',
-  'BH_BHL': 'https://lambent-piroshki-ac2ccb.netlify.app/?loja=BH_BHL',
-  'BH_BHP': 'https://lambent-piroshki-ac2ccb.netlify.app/?loja=BH_BHP',
-  'BH_BHS': 'https://lambent-piroshki-ac2ccb.netlify.app/?loja=BH_BHS',
-  'RJ_RJA': 'https://lambent-piroshki-ac2ccb.netlify.app/?loja=RJ_RJA',
-  'RJ_RJB': 'https://lambent-piroshki-ac2ccb.netlify.app/?loja=RJ_RJB',
-  'RJ_RJG': 'https://lambent-piroshki-ac2ccb.netlify.app/?loja=RJ_RJG',
-  'RJ_RJL': 'https://lambent-piroshki-ac2ccb.netlify.app/?loja=RJ_RJL',
-  'RJ_RJV': 'https://lambent-piroshki-ac2ccb.netlify.app/?loja=RJ_RJV',
-  'RJ_RJI': 'https://lambent-piroshki-ac2ccb.netlify.app/?loja=RJ_RJI',
-};
 
 const FILIAIS={
   BV:{label:'Boa Vista — Porto Feliz/SP',cor:'#2E75B6'},
@@ -513,7 +479,6 @@ function buildNav(){
 
 function showPage(page){
   if(page!=='escala') pararAutoSync();
-  if(page!=='dashboard') pararAutoDash();
   document.querySelectorAll('.nav-pill').forEach(b=>{
     b.classList.toggle('active',b.textContent===({dashboard:'Dashboard',escala:'Escala',vr:'Pedido VR',historico:'Histórico'}[page]||''));
   });
@@ -534,14 +499,6 @@ let _holCache={};
 function getHol(yr,fid=''){const cidade=FILIAL_CIDADE[fid]||'SP';const k=yr+'_'+cidade;if(!_holCache[k])_holCache[k]=buildHolidays(yr,cidade);return _holCache[k];}
 
 // ── DASHBOARD ─────────────────────────────────────────────────────
-let _dashInterval = null;
-
-function iniciarAutoDash(){ /* desativado */ }
-
-function pararAutoDash(){
-  if(_dashInterval){ clearInterval(_dashInterval); _dashInterval=null; }
-}
-
 function pgDashboard(){
   const main=document.getElementById('main-content');
   const yr=currentYear,mo=currentMonth;
@@ -563,11 +520,8 @@ function pgDashboard(){
         </select></div>
       <div class="form-group" style="max-width:120px"><label>Ano</label>
         <select onchange="currentYear=+this.value;if(currentYear===2026&&currentMonth<11)currentMonth=11;pgDashboard()">
-          ${Array.from({length:20},(_,i)=>2026+i).map(y=>`<option ${y===yr?'selected':''}>${y}</option>`).join('')}
+          ${[2026,2027,2028,2029].map(y=>`<option ${y===yr?'selected':''}>${y}</option>`).join('')}
         </select></div>
-      <div class="form-group" style="max-width:160px;display:flex;align-items:flex-end">
-        <button id="btn-sync-all" class="btn" onclick="sincronizarTodasLojas()" style="width:100%;background:var(--gnb);color:var(--gn);font-weight:700;border:1.5px solid var(--gn)">🔄 Atualizar tudo</button>
-      </div>
     </div>
     <div id="dash-tabela">
       <div style="text-align:center;padding:24px;color:var(--sub);font-size:13px">
@@ -583,7 +537,6 @@ function pgDashboard(){
   </div>`;
 
   // ── Calcula em segundo plano sem travar a tela ───────────────
-  if(_lojaMode) return; // não calcula dashboard em modo loja
   setTimeout(()=>{
     let totalFuncs=0,totalVR=0,totalDias=0,totalFer=0;
     const resumos=[];
@@ -649,17 +602,10 @@ function openPicker(cell,tipo,dia,wdName,fid,empId,yr,mo){
       <span class="pip" style="background:${o.bg}">${o.v}</span>${o.l}</button>`).join('')}
     <button class="day-popup-btn clear" onclick="pickDay('','${fid}','${empId}',${yr},${mo},${dia})">
       <span class="pip" style="background:#dee2e6;color:#6C757D">—</span>Limpar</button>`;
-  document.body.appendChild(popup);
-  const pw=popup.offsetWidth||160;
-  const ph=popup.offsetHeight||220;
-  let top=rect.bottom+6;
-  let left=rect.left;
-  if(top+ph>window.innerHeight-10) top=rect.top-ph-6;
-  if(left+pw>window.innerWidth-10) left=window.innerWidth-pw-10;
-  if(left<5) left=5;
-  if(top<5) top=5;
+  const top=Math.min(rect.bottom+4,window.innerHeight-280);
+  const left=Math.min(rect.left,window.innerWidth-165);
   popup.style.top=top+'px';popup.style.left=left+'px';
-  _popup={popup,cell};
+  document.body.appendChild(popup);_popup={popup,cell};
   setTimeout(()=>document.addEventListener('click',_outClick,{once:true}),0);
 }
 function _outClick(e){if(_popup&&!_popup.popup.contains(e.target))closePopup();}
@@ -675,10 +621,10 @@ function pickDay(val,fid,empId,yr,mo,dia){
   const emp=emps.find(e=>e.id===empId);
   if(emp){
     const dias=escalaLocal[k].dias;
-    const rates=getRates(emp,yr,mo);
-    const calc=calcTotal(dias,rates);
-    escalaLocal[k].qtd=calc.qtd;escalaLocal[k].qtdF=calc.qtdF;
-    escalaLocal[k].total=calc.total;
+    // qtd/qtdF calculated in calcTotal below
+    const rate=emp.rate_d||emp.rate_x||emp.rate_sdf||0;
+    escalaLocal[k].qtd=qtd;escalaLocal[k].qtdF=qtdF;
+    escalaLocal[k].total=qtd*rate+qtdF*(emp.rate_f||0);
   }
   salvarLocal();
   // Atualiza célula e totais sem rerenderizar tudo
@@ -723,7 +669,7 @@ function pgEscala(){
         </select></div>
       <div class="form-group" style="max-width:115px"><label>Ano</label>
         <select id="sel-ano" onchange="currentYear=+this.value;if(currentYear===2026&&currentMonth<11)currentMonth=11;updateMesSelect('sel-mes',currentYear,currentMonth);renderGrade()">
-          ${Array.from({length:20},(_,i)=>2026+i).map(y=>`<option ${y===currentYear?'selected':''}>${y}</option>`).join('')}
+          ${[2026,2027,2028,2029].map(y=>`<option ${y===currentYear?'selected':''}>${y}</option>`).join('')}
         </select></div>
       <div class="form-group" style="max-width:120px;display:flex;align-items:flex-end">
         <button class="btn btn-outline" onclick="exportarEscala()" style="width:100%">📄 Exportar</button>
@@ -733,6 +679,7 @@ function pgEscala(){
   <div class="card">
     <div id="escala-legend" class="legend"></div>
     <div class="escala-wrap" id="grade-wrap">
+      <div class="loading"><div class="loading-spinner"></div></div>
     </div>
   </div>`;
   renderGrade();
@@ -740,7 +687,6 @@ function pgEscala(){
 
 function renderGrade(){
   const fid=currentFilial,yr=currentYear,mo=currentMonth;
-  // Abre IMEDIATAMENTE — sem esperar servidor
   _renderGradeInternal(fid,yr,mo);
 }
 function _renderGradeInternal(fid,yr,mo){
@@ -798,10 +744,10 @@ function _renderGradeInternal(fid,yr,mo){
     }
     rows+=`<td class="sum-qtd" id="eq_${e.id}">${qtd||''}</td>
       <td class="sum-fer" id="ef_${e.id}">${qtdF||''}</td>
-      <td class="sum-t<td class="sum-total" id="et_${e.id}">R$${total.toFixed(2)}</td>
+      <td class="sum-total" id="et_${e.id}">R$${total.toFixed(2)}</td>
     </tr>`;
   }
-  // auto sync handled by renderGrade
+  // auto sync removed
   wrap.innerHTML=`<table class="escala-table">
     <thead>
       <tr><th class="col-nome" rowspan="2">FUNCIONÁRIO</th><th class="col-func" rowspan="2">FUNÇÃO</th>${thDias}<th class="day-header" style="background:var(--gn)">Qtd</th><th class="day-header" style="background:#FF6B35">Fer</th><th class="day-header" style="background:var(--db);min-width:68px">Total R$</th></tr>
@@ -890,7 +836,7 @@ function pgVR(){
         </select></div>
       <div class="form-group" style="max-width:115px"><label>Ano</label>
         <select onchange="currentYear=+this.value;if(currentYear===2026&&currentMonth<11)currentMonth=11;pgVR()">
-          ${Array.from({length:20},(_,i)=>2026+i).map(y=>`<option ${y===yr?'selected':''}>${y}</option>`).join('')}
+          ${[2026,2027,2028,2029].map(y=>`<option ${y===yr?'selected':''}>${y}</option>`).join('')}
         </select></div>
       <div class="form-group" style="max-width:140px;display:flex;align-items:flex-end">
         <button class="btn btn-outline" onclick="exportCSV()" style="width:100%">⬇ Exportar CSV</button>
@@ -978,7 +924,7 @@ function pgHistorico(){
         </select></div>`:''}
       <div class="form-group" style="max-width:115px"><label>Ano</label>
         <select onchange="currentYear=+this.value;if(currentYear===2026&&currentMonth<11)currentMonth=11;pgHistorico()">
-          ${Array.from({length:20},(_,i)=>2026+i).map(y=>`<option ${y===yr?'selected':''}>${y}</option>`).join('')}
+          ${[2026,2027,2028,2029].map(y=>`<option ${y===yr?'selected':''}>${y}</option>`).join('')}
         </select></div>
     </div>
   </div>
@@ -1068,85 +1014,6 @@ function salvarFeriadosCidade(cidade, lista){
   setFeriadosCustom(custom);
   // Limpa cache de feriados para forçar recálculo
   _holCache = {};
-}
-
-
-function renderLinksTab(){
-  const cont = document.getElementById('gestao-content');
-  if(!cont) return;
-  const REGIOES = [
-    {nome:'Boa Vista / Brasília', fids:['BV','BSB']},
-    {nome:'São Paulo', fids:['SP_CATARINA','SP_CIDADE_JARDIM','SP_GABRIEL_MONTEIRO','SP_HIGIENOPOLIS','SP_IGT','SP_ITUPEVA','SP_JOAO_CACHOEIRA','SP_VNC']},
-    {nome:'Belo Horizonte', fids:['BH_BHB','BH_BHL','BH_BHP','BH_BHS']},
-    {nome:'Rio de Janeiro', fids:['RJ_RJA','RJ_RJB','RJ_RJG','RJ_RJL','RJ_RJV','RJ_RJI']},
-  ];
-  let html = `<div class="card">
-    <div class="card-title">🔗 Links por Loja</div>
-    <div class="alert alert-info" style="margin-bottom:14px">
-      Clique em <strong>📋 Copiar</strong> e envie o link para a gerente pelo WhatsApp.
-      Ela abre a planilha Google, preenche a escala e você vê na hora.
-    </div>`;
-  for(const reg of REGIOES){
-    html += `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--sub);margin:14px 0 8px">${reg.nome}</div>`;
-    for(const fid of reg.fids){
-      const fcfg=FILIAIS[fid]; if(!fcfg) continue;
-      const link = LINKS_LOJAS[fid]||'';
-      html += `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#F8F9FA;border-radius:8px;border:1px solid var(--border);margin-bottom:6px;flex-wrap:wrap">
-        <span style="width:11px;height:11px;border-radius:50%;background:${fcfg.cor};flex-shrink:0"></span>
-        <span style="font-weight:700;font-size:12px;flex:1;min-width:160px;color:var(--db)">${fcfg.label}</span>
-        <code style="font-size:10px;color:var(--sub);flex:2;min-width:160px;word-break:break-all">${link}</code>
-        <div style="display:flex;gap:6px;flex-shrink:0">
-          <button class="btn btn-sm btn-outline" onclick="copiarLink('${link}',this)">📋 Copiar</button>
-          <a class="btn btn-sm btn-primary" href="${link}" target="_blank">🔗 Abrir</a>
-        </div>
-      </div>`;
-    }
-  }
-  html += '</div>';
-  cont.innerHTML = html;
-}
-function _renderLinksTab_old_unused(){
-  const cont = document.getElementById('gestao-content');
-  if(!cont) return;
-  const base = window.location.href.split('?')[0];
-  const REGIOES = [
-    {nome:'Boa Vista / Brasília', fids:['BV','BSB']},
-    {nome:'São Paulo', fids:['SP_CATARINA','SP_CIDADE_JARDIM','SP_GABRIEL_MONTEIRO','SP_HIGIENOPOLIS','SP_IGT','SP_ITUPEVA','SP_JOAO_CACHOEIRA','SP_VNC']},
-    {nome:'Belo Horizonte', fids:['BH_BHB','BH_BHL','BH_BHP','BH_BHS']},
-    {nome:'Rio de Janeiro', fids:['RJ_RJA','RJ_RJB','RJ_RJG','RJ_RJL','RJ_RJV','RJ_RJI']},
-  ];
-  let html = `<div class="card">
-    <div class="card-title">🔗 Links por Loja</div>
-    <div class="alert alert-info" style="margin-bottom:14px">
-      Envie o link da loja para cada gerente pelo WhatsApp ou e-mail.
-      Ela abre no navegador sem precisar de login e cai direto na escala da loja dela.
-    </div>`;
-  for(const reg of REGIOES){
-    html += `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--sub);margin:14px 0 8px">${reg.nome}</div>`;
-    for(const fid of reg.fids){
-      const fcfg=FILIAIS[fid]; if(!fcfg) continue;
-      const link = base+'?loja='+fid;
-      html += `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#F8F9FA;border-radius:8px;border:1px solid var(--border);margin-bottom:6px;flex-wrap:wrap">
-        <span style="width:11px;height:11px;border-radius:50%;background:${fcfg.cor};flex-shrink:0"></span>
-        <span style="font-weight:700;font-size:12px;flex:1;min-width:160px;color:var(--db)">${fcfg.label}</span>
-        <code style="font-size:10px;color:var(--sub);flex:2;min-width:160px;word-break:break-all">${link}</code>
-        <div style="display:flex;gap:6px;flex-shrink:0">
-          <button class="btn btn-sm btn-outline" onclick="copiarLink('${link}',this)">📋 Copiar</button>
-          <a class="btn btn-sm btn-primary" href="${link}" target="_blank">🔗 Abrir</a>
-        </div>
-      </div>`;
-    }
-  }
-  html += '</div>';
-  cont.innerHTML = html;
-}
-
-function copiarLink(link, btn){
-  navigator.clipboard.writeText(link).then(()=>{
-    const orig=btn.textContent;
-    btn.textContent='✅ Copiado!'; btn.disabled=true;
-    setTimeout(()=>{btn.textContent=orig;btn.disabled=false;},2500);
-  }).catch(()=>{ prompt('Copie o link:', link); });
 }
 
 function renderFeriados(){
@@ -1341,7 +1208,6 @@ function setFuncsLocal(fid,emps){
     localStorage.setItem('funcs_'+fid, JSON.stringify(emps));
     localStorage.setItem('funcs_versao_'+fid, DADOS_VERSAO[fid]||'1');
   }catch(e){}
-  // Sync de funcionários removido para melhor performance
 }
 function getFuncs(fid){
   return getFuncsLocal(fid) || FUNCIONARIOS[fid] || [];
@@ -1376,25 +1242,13 @@ const TIPOS_LISTA=[
 
 function pgGestao(aba='funcionarios'){
   const main=document.getElementById('main-content');
-  const tabs=`<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">
+  main.innerHTML=`
+  <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">
     <button class="btn ${aba==='funcionarios'?'btn-primary':'btn-outline'}" onclick="pgGestao('funcionarios')">👥 Funcionários</button>
     <button class="btn ${aba==='feriados'?'btn-primary':'btn-outline'}" onclick="pgGestao('feriados')">📅 Feriados</button>
-    <button class="btn ${aba==='links'?'btn-primary':'btn-outline'}" onclick="pgGestao('links')">🔗 Links por Loja</button>
-  </div>`;
-
-  if(aba==='links'){
-    main.innerHTML = tabs + '<div id="gestao-content"></div>';
-    renderLinksTab();
-    return;
-  }
-  if(aba==='feriados'){
-    main.innerHTML = tabs + '<div id="gestao-content"></div>';
-    renderFeriados();
-    return;
-  }
-  // Funcionários
-  main.innerHTML = tabs + `<div class="card">
-    <div class="card-title">👥 Gestão de Funcionários</div>
+  </div>
+  ${aba==='feriados' ? '<div id="gestao-content"></div>' : `<div class="card">
+    <div class="card-title">👥 Gestão de Funcionários</div>`} : ''}
     <div class="form-row" style="margin-bottom:14px">
       <div class="form-group">
         <label>Filial</label>
@@ -1502,7 +1356,7 @@ function buildTransferenciaHTML(fidAtual){
 function buildVigenciaHTML(){
   const now=new Date(), cm=now.getMonth()+1, cy=now.getFullYear();
   const moOpts=MONTHS.map((m,i)=>`<option value="${i+1}" ${i+1===cm?'selected':''}>${m}</option>`).join('');
-  const yrOpts=Array.from({length:20},(_,i)=>2026+i).map(y=>`<option value="${y}" ${y===cy?'selected':''}>${y}</option>`).join('');
+  const yrOpts=[2026,2027,2028,2029].map(y=>`<option value="${y}" ${y===cy?'selected':''}>${y}</option>`).join('');
   return `<div style="background:var(--orb);border-radius:7px;padding:11px 14px;margin-bottom:12px;font-size:12px;color:#7F6000">
     ⚠️ <strong>Alterou os valores de VR?</strong> Informe a partir de quando o novo valor vale.
     O histórico dos meses anteriores será preservado.
@@ -1779,31 +1633,6 @@ let _syncAtivo = false;
 
 function temSync(){ return !!SCRIPT_URL; }
 
-// Cache de funcionários do servidor
-let _funcsCache = {};
-let _funcsCacheTime = 0;
-
-async function carregarFuncsServidor(){
-  // Desativado para evitar lentidão — funcionários ficam no arquivo
-  return false;
-}
-
-// Cache desativado — usa getFuncs original diretamente
-
-async function sincronizarTodasLojas(){
-  if(!temSync()){ showAlert('Configure o Tempo Real primeiro.','error'); return; }
-  const btn=document.getElementById('btn-sync-all');
-  if(btn){ btn.textContent='⏳ Buscando…'; btn.disabled=true; }
-  const yr=currentYear, mo=currentMonth;
-  const fids=Object.keys(FILIAIS);
-  // Busca todas em paralelo (muito mais rápido)
-  const results = await Promise.all(fids.map(fid=>sincronizarCarregar(fid,yr,mo)));
-  const count = results.filter(Boolean).length;
-  if(btn){ btn.textContent='🔄 Atualizar tudo'; btn.disabled=false; }
-  showAlert('✅ '+count+' lojas atualizadas!');
-  pgDashboard();
-}
-
 async function sincronizarSalvar(fid, yr, mo){
   if(!temSync()) return;
   const emps = getFuncs(fid);
@@ -1847,7 +1676,15 @@ async function sincronizarCarregar(fid, yr, mo){
 }
 
 function iniciarAutoSync(fid, yr, mo){
-  // Desativado — use botão 🔄 Atualizar para sincronizar
+  pararAutoSync();
+  if(!temSync()) return;
+  _syncAtivo = true;
+  // Atualiza a cada 30 segundos
+  _syncInterval = setInterval(async ()=>{
+    if(!_syncAtivo) return;
+    const ok = await sincronizarCarregar(fid, yr, mo);
+    if(ok) renderGrade();
+  }, 30000);
 }
 
 function pararAutoSync(){
@@ -1944,3 +1781,4 @@ showPage(_lojaMode?'escala':'dashboard');
 </script>
 </body>
 </html>
+
