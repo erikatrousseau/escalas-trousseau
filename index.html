@@ -1288,14 +1288,23 @@ const TIPOS_LISTA=[
 
 function pgGestao(aba='funcionarios'){
   const main=document.getElementById('main-content');
-  main.innerHTML=`
-  <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">
+  const tabs=`<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">
     <button class="btn ${aba==='funcionarios'?'btn-primary':'btn-outline'}" onclick="pgGestao('funcionarios')">👥 Funcionários</button>
     <button class="btn ${aba==='feriados'?'btn-primary':'btn-outline'}" onclick="pgGestao('feriados')">📅 Feriados</button>
     <button class="btn ${aba==='links'?'btn-primary':'btn-outline'}" onclick="pgGestao('links')">🔗 Links por Loja</button>
-  </div>
-  ${(aba==='feriados'||aba==='links') ? '<div id="gestao-content"></div>' : `<div class="card">
-    <div class="card-title">👥 Gestão de Funcionários</div>`} : ''}
+  </div>`;
+  if(aba==='links'){
+    main.innerHTML=tabs+'<div id="gestao-content"></div>';
+    renderLinksTab();
+    return;
+  }
+  if(aba==='feriados'){
+    main.innerHTML=tabs+'<div id="gestao-content"></div>';
+    renderFeriados();
+    return;
+  }
+  main.innerHTML=tabs+`<div class="card">
+    <div class="card-title">👥 Gestão de Funcionários</div>
     <div class="form-row" style="margin-bottom:14px">
       <div class="form-group">
         <label>Filial</label>
