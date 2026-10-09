@@ -732,7 +732,6 @@ function pgEscala(){
   <div class="card">
     <div id="escala-legend" class="legend"></div>
     <div class="escala-wrap" id="grade-wrap">
-      <div class="loading"><div class="loading-spinner"></div></div>
     </div>
   </div>`;
   renderGrade();
@@ -801,8 +800,7 @@ function _renderGradeInternal(fid,yr,mo){
       <td class="sum-t<td class="sum-total" id="et_${e.id}">R$${total.toFixed(2)}</td>
     </tr>`;
   }
-  iniciarAutoSync(fid,yr,mo);
-  iniciarAutoSync(fid,yr,mo);
+  // auto sync handled by renderGrade
   wrap.innerHTML=`<table class="escala-table">
     <thead>
       <tr><th class="col-nome" rowspan="2">FUNCIONÁRIO</th><th class="col-func" rowspan="2">FUNÇÃO</th>${thDias}<th class="day-header" style="background:var(--gn)">Qtd</th><th class="day-header" style="background:#FF6B35">Fer</th><th class="day-header" style="background:var(--db);min-width:68px">Total R$</th></tr>
@@ -1862,15 +1860,7 @@ async function sincronizarCarregar(fid, yr, mo){
 }
 
 function iniciarAutoSync(fid, yr, mo){
-  pararAutoSync();
-  if(!temSync()) return;
-  _syncAtivo = true;
-  // Atualiza a cada 30 segundos
-  _syncInterval = setInterval(async ()=>{
-    if(!_syncAtivo) return;
-    const ok = await sincronizarCarregar(fid, yr, mo);
-    if(ok) renderGrade();
-  }, 30000);
+  // Desativado — use botão 🔄 Atualizar para sincronizar
 }
 
 function pararAutoSync(){
