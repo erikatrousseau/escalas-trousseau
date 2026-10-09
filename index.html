@@ -1017,6 +1017,51 @@ function salvarFeriadosCidade(cidade, lista){
   _holCache = {};
 }
 
+
+function renderLinksTab(){
+  const cont = document.getElementById('gestao-content');
+  if(!cont) return;
+  const REGIOES = [
+    {nome:'Boa Vista / Brasília', fids:['BV','BSB']},
+    {nome:'São Paulo', fids:['SP_CATARINA','SP_CIDADE_JARDIM','SP_GABRIEL_MONTEIRO','SP_HIGIENOPOLIS','SP_IGT','SP_ITUPEVA','SP_JOAO_CACHOEIRA','SP_VNC']},
+    {nome:'Belo Horizonte', fids:['BH_BHB','BH_BHL','BH_BHP','BH_BHS']},
+    {nome:'Rio de Janeiro', fids:['RJ_RJA','RJ_RJB','RJ_RJG','RJ_RJL','RJ_RJV','RJ_RJI']},
+  ];
+  const BASE = 'https://erikatrousseau.github.io/escalas-trousseau';
+  let html = `<div class="card">
+    <div class="card-title">🔗 Links por Loja</div>
+    <div class="alert alert-info" style="margin-bottom:14px">
+      Clique em <strong>📋 Copiar</strong> e envie o link para a gerente pelo WhatsApp.
+      Ela abre no celular ou computador, sem precisar de login.
+    </div>`;
+  for(const reg of REGIOES){
+    html += `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--sub);margin:14px 0 8px">${reg.nome}</div>`;
+    for(const fid of reg.fids){
+      const fcfg=FILIAIS[fid]; if(!fcfg) continue;
+      const link = `${BASE}/?loja=${fid}`;
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#F8F9FA;border-radius:8px;border:1px solid var(--border);margin-bottom:6px;flex-wrap:wrap">
+        <span style="width:11px;height:11px;border-radius:50%;background:${fcfg.cor};flex-shrink:0"></span>
+        <span style="font-weight:700;font-size:12px;flex:1;min-width:160px;color:var(--db)">${fcfg.label}</span>
+        <code style="font-size:10px;color:var(--sub);flex:2;min-width:160px;word-break:break-all">${link}</code>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn btn-sm btn-outline" onclick="copiarLink('${link}',this)">📋 Copiar</button>
+          <a class="btn btn-sm btn-primary" href="${link}" target="_blank">🔗 Abrir</a>
+        </div>
+      </div>`;
+    }
+  }
+  html += '</div>';
+  cont.innerHTML = html;
+}
+
+function copiarLink(link, btn){
+  navigator.clipboard.writeText(link).then(()=>{
+    const orig=btn.textContent;
+    btn.textContent='✅ Copiado!'; btn.disabled=true;
+    setTimeout(()=>{btn.textContent=orig;btn.disabled=false;},2500);
+  }).catch(()=>{ prompt('Copie o link:', link); });
+}
+
 function renderFeriados(){
   const cont = document.getElementById('gestao-content');
   if(!cont) return;
@@ -1247,8 +1292,9 @@ function pgGestao(aba='funcionarios'){
   <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">
     <button class="btn ${aba==='funcionarios'?'btn-primary':'btn-outline'}" onclick="pgGestao('funcionarios')">👥 Funcionários</button>
     <button class="btn ${aba==='feriados'?'btn-primary':'btn-outline'}" onclick="pgGestao('feriados')">📅 Feriados</button>
+    <button class="btn ${aba==='links'?'btn-primary':'btn-outline'}" onclick="pgGestao('links')">🔗 Links por Loja</button>
   </div>
-  ${aba==='feriados' ? '<div id="gestao-content"></div>' : `<div class="card">
+  ${(aba==='feriados'||aba==='links') ? '<div id="gestao-content"></div>' : `<div class="card">
     <div class="card-title">👥 Gestão de Funcionários</div>`} : ''}
     <div class="form-row" style="margin-bottom:14px">
       <div class="form-group">
