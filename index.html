@@ -126,7 +126,7 @@ label{font-size:11px;font-weight:600;color:var(--sub);display:block;margin-botto
     <div style="font-size:11px;opacity:.7" id="loja-label"></div>
   </header>
   <main id="main-content">
-    <div class="loading"><div class="loading-spinner"></div>Iniciando…</div>
+    <div id="main-content"></div>
   </main>
 </div>
 
@@ -583,6 +583,7 @@ function pgDashboard(){
   </div>`;
 
   // ── Calcula em segundo plano sem travar a tela ───────────────
+  if(_lojaMode) return; // não calcula dashboard em modo loja
   setTimeout(()=>{
     let totalFuncs=0,totalVR=0,totalDias=0,totalFer=0;
     const resumos=[];
