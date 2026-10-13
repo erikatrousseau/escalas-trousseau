@@ -134,7 +134,7 @@ label{font-size:11px;font-weight:600;color:var(--sub);display:block;margin-botto
 // ══════════════════════════════════════════════════════════════════
 // CONFIGURAÇÃO — Cole a URL do Apps Script após publicar
 // ══════════════════════════════════════════════════════════════════
-let SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwUY3ezkWvajNCCR5slIxviHmGVxHsi7m20bbR_O9sTGgGeNPH0IA1uU7Ae-ZUIxMT0UQ/exec';
+let SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzRwcUL_Nz753-y2nQX68zO-gibdfa0QZWA9X6c2M7s1K_Til29Olh5swYc8qJCqKMhrA/exec';
 // ══════════════════════════════════════════════════════════════════
 
 const MONTHS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -1255,6 +1255,30 @@ function setFuncsLocal(fid,emps){
     localStorage.setItem('funcs_'+fid, JSON.stringify(emps));
     localStorage.setItem('funcs_versao_'+fid, DADOS_VERSAO[fid]||'1');
   }catch(e){}
+  // Sincroniza com Google Sheets automaticamente
+  if(temSync()){
+    fetch(SCRIPT_URL,{
+      method:'POST',
+      body:JSON.stringify({action:'salvar_funcs',fid,funcs:emps})
+    }).then(r=>r.json()).then(j=>{
+      if(j.ok) syncStatus('👥 Funcionários salvos '+new Date().toLocaleTimeString('pt-BR'),'#90EE90');
+    }).catch(()=>{});
+  }
+}
+
+// Carrega funcionários do Google Sheets
+async function carregarFuncsServidor(fid){
+  if(!temSync()) return false;
+  try{
+    const r = await fetch(`${SCRIPT_URL}?action=get_funcs&fid=${fid}`);
+    const j = await r.json();
+    if(j.ok && j.funcs && j.funcs.length){
+      localStorage.setItem('funcs_'+fid, JSON.stringify(j.funcs));
+      localStorage.setItem('funcs_versao_'+fid, DADOS_VERSAO[fid]||'1');
+      return true;
+    }
+  }catch(e){}
+  return false;
 }
 function getFuncs(fid){
   return getFuncsLocal(fid) || FUNCIONARIOS[fid] || [];
