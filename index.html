@@ -1339,9 +1339,12 @@ function renderListaFuncs(){
 
   function rowFunc(e,i){
     const isInativo = e.demissao && e.demissao < hoje;
+    const isAfastado = e.aft_ini && e.aft_ini <= hoje && (!e.aft_fim || e.aft_fim >= hoje);
     const statusBadge = isInativo
       ? `<span class="badge" style="background:#FDECEA;color:var(--red)">⛔ Inativo</span>`
-      : `<span class="badge badge-green">✅ Ativo</span>`;
+      : isAfastado
+        ? `<span class="badge" style="background:#FEF9E7;color:#7F6000">🏥 Afastado</span>`
+        : `<span class="badge badge-green">✅ Ativo</span>`;
     return `<tr style="opacity:${isInativo?'.5':'1'}">
       <td style="color:var(--sub);font-size:11px">${i+1}</td>
       <td>
@@ -1520,6 +1523,37 @@ function abrirModalFunc(idx){
         </div>
       </div>
       ${isNew?'':buildTransferenciaHTML(fid)}
+
+      <div style="background:#EBF5FB;border-radius:7px;padding:11px 14px;margin-top:8px;font-size:12px;color:var(--db)">
+        🏥 <strong>Afastamento</strong>
+        <div style="font-size:11px;color:var(--sub);margin:4px 0 10px">Quando afastado aparece como <strong>AFT</strong> na escala e não entra no cálculo de VR.</div>
+        <div class="form-row" style="margin-bottom:0">
+          <div class="form-group">
+            <label>Início do Afastamento</label>
+            <input id="fn-aft-ini" type="date" value="${e.aft_ini||''}">
+          </div>
+          <div class="form-group">
+            <label>Retorno Previsto</label>
+            <input id="fn-aft-fim" type="date" value="${e.aft_fim||''}">
+            <small style="color:var(--sub);font-size:10px;margin-top:2px;display:block">Deixe em branco se indefinido</small>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:#E2EFDA;border-radius:7px;padding:11px 14px;margin-top:8px;font-size:12px;color:var(--gn)">
+        🔄 <strong>Mudança de Função</strong>
+        <div style="font-size:11px;color:var(--sub);margin:4px 0 10px">Registre quando houve mudança de função. A nova função já está no campo acima.</div>
+        <div class="form-row" style="margin-bottom:0">
+          <div class="form-group">
+            <label>Função anterior</label>
+            <input id="fn-func-ant" type="text" value="${e.func_anterior||''}" placeholder="Ex: ESTOQUISTA">
+          </div>
+          <div class="form-group">
+            <label>Data da mudança</label>
+            <input id="fn-func-dt" type="date" value="${e.func_data||''}">
+          </div>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="document.getElementById('_modal_func').remove()">Cancelar</button>
