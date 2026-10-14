@@ -1976,9 +1976,9 @@ async function testarSync(){
   if(!url){ showAlert('Cole a URL primeiro.','error'); return; }
   showAlert('Testando conexão…','info');
   try{
-    const resp = await fetch(url);
+    const resp = await fetch(url+'?action=ping');
     const json = await resp.json();
-    if(json.ok) showAlert('✅ Conexão OK! O Apps Script está funcionando.');
+    if(json.ok) showAlert('✅ Conexão OK! '+json.msg);
     else showAlert('⚠️ Resposta inesperada: '+JSON.stringify(json),'error');
   }catch(err){
     showAlert('❌ Erro: '+err.message+' — Verifique se a URL está correta e se o acesso é "Qualquer pessoa".','error');
