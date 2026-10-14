@@ -1589,22 +1589,23 @@ function abrirModalFunc(idx){
       </div>
       <div id="dica-tipo" class="alert alert-info" style="font-size:12px;margin-bottom:12px"></div>
       <div class="form-row">
-        <div class="form-group">
-          <label id="lbl-rate-d">R$ por Domingo / Dia / Sáb</label>
-          <input id="fn-rate-d" type="number" step="0.01" min="0"
-            value="${e.rate_d||e.rate_x||e.rate_sdf||0}" placeholder="0.00">
-          <small style="color:var(--sub);font-size:10px;margin-top:3px;display:block" id="hint-d"></small>
-        </div>
         <div class="form-group" id="grp-rate-x" style="display:none">
-          <label>R$ por Dia (X) — diferente do Domingo</label>
+          <label id="lbl-rate-x">R$ por Dia (X)</label>
           <input id="fn-rate-x" type="number" step="0.01" min="0"
             value="${e.rate_x||0}" placeholder="0.00">
-          <small style="color:var(--sub);font-size:10px;margin-top:3px;display:block">Valor para dias normais (X). O campo acima vira o valor do Domingo (D).</small>
+          <small style="color:var(--sub);font-size:10px;margin-top:3px;display:block">Valor para dias normais trabalhados (X)</small>
         </div>
         <div class="form-group">
-          <label>R$ por Feriado (F)</label>
+          <label id="lbl-rate-d">R$ por S/D/F</label>
+          <input id="fn-rate-d" type="number" step="0.01" min="0"
+            value="${e.rate_d||e.rate_sdf||e.rate_f||0}" placeholder="0.00">
+          <small style="color:var(--sub);font-size:10px;margin-top:3px;display:block" id="hint-d"></small>
+        </div>
+        <div class="form-group" id="grp-rate-f" style="display:none">
+          <label>R$ por Feriado (F) diferente</label>
           <input id="fn-rate-f" type="number" step="0.01" min="0"
             value="${e.rate_f||0}" placeholder="0.00">
+          <small style="color:var(--sub);font-size:10px;margin-top:3px;display:block">Só preencha se F for diferente de S/D</small>
         </div>
       </div>
       <div class="form-group" style="margin-bottom:12px">
@@ -1689,6 +1690,14 @@ function atualizarDicasTipo(){
   const dica=document.getElementById('dica-tipo');
   const lblD=document.getElementById('lbl-rate-d');
   const hintD=document.getElementById('hint-d');
+  const grpX=document.getElementById('grp-rate-x');
+  const grpF=document.getElementById('grp-rate-f');
+  // Mostra campo X para tipos que têm dia normal diferente de S/D/F
+  const showX=['mensalista','estoquista','misto','estoquista_loja','rj_estoquista','rj_staff'].includes(tipo);
+  // Mostra campo F separado para tipos onde F difere de D
+  const showF=['vendedora','misto','estoquista_loja'].includes(tipo);
+  if(grpX) grpX.style.display=showX?'':'none';
+  if(grpF) grpF.style.display=showF?'':'none';
   const dicas={
     vendedora:   {d:'💡 Vendedora: D = domingo | F = feriado',lbl:'R$ por Domingo (D)',hint:'Pago quando digitar D na escala'},
     mensalista:  {d:'💡 Mensalista: X = dia trabalhado | F = feriado',lbl:'R$ por Dia (X)',hint:'Pago quando digitar X na escala'},
@@ -1732,10 +1741,10 @@ function salvarFunc(fid, idx){
     nome: nome,
     funcao: document.getElementById('fn-funcao').value.trim()||'',
     tipo: tipo,
-    rate_d: ['vendedora','misto','rj_vendedora','rj_staff','estoquista_loja','rj_estoquista'].includes(tipo) ? rateD : 0,
-    rate_x: ['mensalista','estoquista','rj_staff','misto','estoquista_loja','rj_estoquista'].includes(tipo) ? parseFloat(document.getElementById('fn-rate-x')?.value)||rateD : 0,
+    rate_d: rateD,
+    rate_x: ['mensalista','estoquista','rj_staff','misto','estoquista_loja','rj_estoquista'].includes(tipo) ? (parseFloat(document.getElementById('fn-rate-x')?.value)||0) : 0,
     rate_sdf: ['rj_vendedora','rj_staff','rj_estoquista'].includes(tipo) ? rateD : 0,
-    rate_f: rateF,
+    rate_f: ['rj_vendedora','rj_estoquista','rj_staff'].includes(tipo) ? rateD : rateF,
     rate_fixo: parseFloat(document.getElementById('fn-rate-fixo')?.value)||0,
     cpf:      document.getElementById('fn-cpf').value.trim(),
     tel:      document.getElementById('fn-tel').value.trim(),
