@@ -496,9 +496,12 @@ function pgDashboard(){
           ${buildMesOptions(mo, currentYear)}
         </select></div>
       <div class="form-group" style="max-width:120px"><label>Ano</label>
-        <select onchange="currentYear=+this.value;if(currentYear===2026&&currentMonth<11)currentMonth=11;pgDashboard()">
-          ${[2026,2027,2028,2029].map(y=>`<option ${y===yr?'selected':''}>${y}</option>`).join('')}
+        <select onchange="currentYear=+this.value;pgDashboard()">
+          ${Array.from({length:20},(_,i)=>2026+i).map(y=>`<option ${y===yr?'selected':''}>${y}</option>`).join('')}
         </select></div>
+      <div class="form-group" style="max-width:160px;display:flex;align-items:flex-end">
+        <button id="btn-sync-all" class="btn" onclick="sincronizarTodasLojas()" style="width:100%;background:var(--gnb);color:var(--gn);font-weight:700;border:1.5px solid var(--gn)">🔄 Atualizar tudo</button>
+      </div>
     </div>
     <div id="dash-tabela">
       <div style="text-align:center;padding:24px;color:var(--sub);font-size:13px">
@@ -1840,6 +1843,19 @@ let _lastSync = null;
 let _syncAtivo = false;
 
 function temSync(){ return !!SCRIPT_URL; }
+
+async function sincronizarTodasLojas(){
+  if(!temSync()){ showAlert('Configure o Tempo Real primeiro.','error'); return; }
+  const btn=document.getElementById('btn-sync-all');
+  if(btn){ btn.textContent='⏳ Buscando…'; btn.disabled=true; }
+  const yr=currentYear, mo=currentMonth;
+  const fids=Object.keys(FILIAIS);
+  const results = await Promise.all(fids.map(fid=>sincronizarCarregar(fid,yr,mo)));
+  const count = results.filter(Boolean).length;
+  if(btn){ btn.textContent='🔄 Atualizar tudo'; btn.disabled=false; }
+  showAlert('✅ '+count+' lojas atualizadas!');
+  pgDashboard();
+}
 
 async function sincronizarSalvar(fid, yr, mo){
   if(!temSync()) return;
