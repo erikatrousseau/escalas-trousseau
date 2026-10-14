@@ -1713,9 +1713,6 @@ function atualizarDicasTipo(){
   if(dica) dica.innerHTML=info.d;
   if(lblD) lblD.textContent=info.lbl;
   if(hintD) hintD.textContent=info.hint;
-  // Mostra campo rate_x separado só para estoquista_loja
-  const grpX=document.getElementById('grp-rate-x');
-  if(grpX) grpX.style.display=(tipo==='estoquista_loja'||tipo==='rj_estoquista')?'':'none';
 }
 
 function salvarFunc(fid, idx){
