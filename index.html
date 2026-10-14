@@ -1746,9 +1746,13 @@ function salvarFunc(fid, idx){
     cpf:      document.getElementById('fn-cpf').value.trim(),
     tel:      document.getElementById('fn-tel').value.trim(),
     email:    document.getElementById('fn-email').value.trim(),
-    admissao: document.getElementById('fn-admissao')?.value||'',
-    demissao: document.getElementById('fn-demissao')?.value||'',
-    ativo:    !document.getElementById('fn-demissao')?.value,
+    admissao:      document.getElementById('fn-admissao')?.value||'',
+    demissao:      document.getElementById('fn-demissao')?.value||'',
+    ativo:         !document.getElementById('fn-demissao')?.value,
+    aft_ini:       document.getElementById('fn-aft-ini')?.value||'',
+    aft_fim:       document.getElementById('fn-aft-fim')?.value||'',
+    func_anterior: document.getElementById('fn-func-ant')?.value||'',
+    func_data:     document.getElementById('fn-func-dt')?.value||'',
   };
 
   // Preserva histórico de taxas anteriores
