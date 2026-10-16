@@ -414,7 +414,15 @@ function getDias(fid,yr,mo,empId){return(escalaLocal[chave(fid,yr,mo,empId)]||{}
 
 // Retorna as taxas corretas para um funcionário num mês/ano específico
 // Respeita o histórico de vigências
+// Afastado o mês inteiro: não recebe VR (nem o valor fixo)
+function afastadoMesInteiro(emp, yr, mo){
+  if(!emp || !emp.aft_ini) return false;
+  const ini=`${yr}-${String(mo).padStart(2,'0')}-01`;
+  const fim=`${yr}-${String(mo).padStart(2,'0')}-${String(new Date(yr,mo,0).getDate()).padStart(2,'0')}`;
+  return emp.aft_ini <= ini && (!emp.aft_fim || emp.aft_fim >= fim);
+}
 function getRates(emp, yr, mo){
+  if(afastadoMesInteiro(emp, yr, mo)) return {rateX:0,rateD:0,rateS:0,rateF:0,fixo:0};
   const hist = emp.rate_historico;
   const fixo = emp.rate_fixo||0;
   // estoquista_loja tem rate_x (dia), rate_d (domingo) e rate_f (feriado) separados
@@ -1879,7 +1887,8 @@ async function sincronizarTodasLojas(){
 let _pend=(()=>{try{return JSON.parse(localStorage.getItem('escalas_pendentes')||'{}');}catch(e){return {};}})();
 function _salvarPend(){try{localStorage.setItem('escalas_pendentes',JSON.stringify(_pend));}catch(e){}}
 function _temDias(d){return !!(d&&d.dias&&Object.keys(d.dias).length);}
-function marcarPendente(fid,yr,mo,empId){const g=`${fid}__${yr}__${mo}`;(_pend[g]=_pend[g]||{})[empId]=1;_salvarPend();}
+function marcarPendente(fid,yr,mo,empId){const g=`${fid}__${yr}__${mo}`;_pend[g]=_pend[g]||{};_pend[g][empId]=(+_pend[g][empId]||0)+1;_salvarPend();}
+const _enviando={};
 const _envTimers={};
 function agendarEnvio(fid,yr,mo,ms){
   if(!temSync()) return;
@@ -1891,7 +1900,10 @@ function agendarEnvio(fid,yr,mo,ms){
 async function enviarSeguro(fid, yr, mo){
   if(!temSync()) return false;
   const g=`${fid}__${yr}__${mo}`;
-  const alterados=Object.keys(_pend[g]||{});
+  if(_enviando[g]){ agendarEnvio(fid,yr,mo,2000); return false; }   // um envio por vez
+  _enviando[g]=true;
+  const snap=Object.assign({},_pend[g]||{});                       // o que estava pendente ao começar
+  const alterados=Object.keys(snap);
   try{
     const r=await fetch(`${SCRIPT_URL}?action=ler&fid=${fid}&yr=${yr}&mo=${mo}`);
     const j=await r.json();
@@ -1913,11 +1925,17 @@ async function enviarSeguro(fid, yr, mo){
     const resp=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'salvar',fid,yr,mo,dados})});
     const jr=await resp.json().catch(()=>({}));
     if(jr&&jr.ok===false) throw new Error(jr.erro||jr.error||'planilha recusou');
-    delete _pend[g]; _salvarPend(); salvarLocal();
+    // Só limpa o pendente de quem NÃO foi alterado de novo durante o envio
+    if(_pend[g]){ for(const id of alterados){ if(_pend[g][id]===snap[id]) delete _pend[g][id]; }
+      if(!Object.keys(_pend[g]).length) delete _pend[g]; }
+    _salvarPend(); salvarLocal();
+    _enviando[g]=false;
+    if(_pend[g]) agendarEnvio(fid,yr,mo,500);                       // houve alteração no meio: envia de novo
     _lastSync=new Date();
     atualizarStatusSync('✅ Salvo na planilha '+_lastSync.toLocaleTimeString('pt-BR'));
     return true;
   }catch(err){
+    _enviando[g]=false;
     atualizarStatusSync('⚠️ Ainda não salvou na planilha — nova tentativa em 30s');
     agendarEnvio(fid,yr,mo,30000);
     return false;
