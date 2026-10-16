@@ -418,20 +418,40 @@ function getDias(fid,yr,mo,empId){return(escalaLocal[chave(fid,yr,mo,empId)]||{}
 
 // Retorna as taxas corretas para um funcionário num mês/ano específico
 // Respeita o histórico de vigências
-function getRates(emp, yr, mo){
-  const hist = emp.rate_historico;
-  const fixo = emp.rate_fixo||0;
-  // estoquista_loja tem rate_x (dia), rate_d (domingo) e rate_f (feriado) separados
-  const isEL  = emp.tipo==='estoquista_loja';
-  const isRJE = emp.tipo==='rj_estoquista';
-  const baseRates = {
-    rateX: emp.rate_x||0,
-    rateD: emp.rate_d||((isEL||isRJE)?0:emp.rate_x)||0,
-    rateS: emp.rate_sdf||emp.rate_d||0,  // sábado RJ estoquista
-    rateF: emp.rate_f||0,
-    fixo
-  };
-  if(!hist || !hist.length) return baseRates;
+function getRates(emp, yr, mo) {
+    let rates = { rateX: 37, rateD: 27, rateS: 27, rateF: 55, fixo: 0 };
+    if (!emp) return rates;
+    
+    const funcao = emp.funcao ? emp.funcao.toUpperCase() : '';
+    const nome = emp.nome ? emp.nome.toUpperCase() : '';
+
+    // 1. REGRAS INDIVIDUAIS (BORDADEIRAS E AFASTADA)
+    if (nome.includes('JANETE DE JESUS NUNES')) {
+        return { rateX: 27, rateD: 27, rateS: 27, rateF: 27, fixo: 210 };
+    }
+    if (nome.includes('TATIANE VIEIRA GOMES')) {
+        return { rateX: 35, rateD: 35, rateS: 35, rateF: 35, fixo: 210 };
+    }
+    if (nome.includes('KELLY FERREIRA DOS SANTOS')) {
+        return { rateX: 27, rateD: 27, rateS: 27, rateF: 27, fixo: 210 };
+    }
+
+    // 2. REGRAS GERAIS PARA LOJAS DE SÃO PAULO
+    if (funcao === 'ESTOQUISTA' || funcao === 'CAIXA' || funcao.includes('SERV') || funcao.includes('GERAIS')) {
+        rates.rateX = 27; // Garante os R$ 27 do Elson, Daniel, Bruno, Victor, Arlete e Maria
+        rates.rateD = 37; // Domingo para Estoque/Caixa/Gerais
+        rates.rateS = 27;
+        rates.rateF = 55; // Feriado
+    } else if (funcao === 'VENDEDORA') {
+        rates.rateX = 0;
+        rates.rateD = 24; // Domingo de Vendedora
+        rates.rateS = 0;
+        rates.rateF = 55; // Feriado
+    }
+    
+    return rates;
+}
+
   const yrmo = yr*100+mo;
   for(const h of hist){
     const ini = h.de_yr*100+h.de_mo;
