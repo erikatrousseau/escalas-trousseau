@@ -623,8 +623,16 @@ function getDayBg(fid,yr,mo,d){
 function updateRowTotals(fid,empId,yr,mo){
   const k=chave(fid,yr,mo,empId);
   const d=escalaLocal[k]||{};
-  const qtd=d.qtd||0,qtdF=d.qtdF||0,total=d.total||0;
-  // fixo already included in total from pickDay
+  // Recalcula sempre com rates atuais
+  const emp=getFuncs(fid).find(e=>e.id===empId);
+  let qtd=d.qtd||0, qtdF=d.qtdF||0, total=d.total||0;
+  if(emp){
+    const rates=getRates(emp,yr,mo);
+    const calc=calcTotal(d.dias||{},rates);
+    qtd=calc.qtd; qtdF=calc.qtdF; total=calc.total;
+    // Salva o total recalculado
+    if(escalaLocal[k]){ escalaLocal[k].total=total; escalaLocal[k].qtd=qtd; escalaLocal[k].qtdF=qtdF; }
+  }
   const eqEl=document.getElementById(`eq_${empId}`);if(eqEl)eqEl.textContent=qtd||'';
   const efEl=document.getElementById(`ef_${empId}`);if(efEl)efEl.textContent=qtdF||'';
   const etEl=document.getElementById(`et_${empId}`);if(etEl)etEl.textContent=total?'R$'+total.toFixed(2):'';
@@ -709,10 +717,9 @@ function _renderGradeInternal(fid,yr,mo){
   let rows='';
   for(const e of emps){
     const dias=getDias(fid,yr,mo,e.id);
-    let qtd=0,qtdF=0;
-    Object.values(dias).forEach(v=>{const u=(v||'').toUpperCase();if(['X','D','S'].includes(u))qtd++;if(u==='F')qtdF++;});
-    const rate=e.rate_d||e.rate_x||e.rate_sdf||0;
-    const total=qtd*rate+qtdF*(e.rate_f||0);
+    const rates=getRates(e,yr,mo);
+    const calc=calcTotal(dias,rates);
+    const qtd=calc.qtd, qtdF=calc.qtdF, total=calc.total;
     rows+=`<tr>
       <td class="col-nome">${e.nome}</td>
       <td class="col-func">${e.funcao}</td>`;
