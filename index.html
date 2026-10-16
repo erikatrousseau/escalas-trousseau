@@ -390,11 +390,7 @@ function salvarLocal(){try{localStorage.setItem('escalas_trousseau',JSON.stringi
 // Wrapper: salva local + sincroniza
 async function salvarESync(fid, yr, mo){
   salvarLocal();
-  if(temSync()) sincronizarSalvar(fid,yr,mo).then(()=>atualizarStatusSync('✅ Salvo '+new Date().toLocaleTimeString('pt-BR')));
-  if(temSync()){
-    atualizarStatusSync('💾 Salvando…');
-    await sincronizarSalvar(fid, yr, mo);
-  }
+  if(temSync()) return enviarSeguro(fid, yr, mo);
 }
 function carregarLocal(){try{const d=localStorage.getItem('escalas_trousseau');if(d)escalaLocal=JSON.parse(d);}catch(e){}}
 function chave(fid,yr,mo,empId){return `${fid}__${yr}__${mo}__${empId}`;}
@@ -608,6 +604,8 @@ function pickDay(val,fid,empId,yr,mo,dia){
     escalaLocal[k].total=calc.total;
   }
   salvarLocal();
+  marcarPendente(fid,yr,mo,empId);
+  agendarEnvio(fid,yr,mo);
   // Atualiza célula e totais sem rerenderizar tudo
   const cell=document.getElementById(`dc_${fid}_${empId}_${dia}`);
   if(cell){
@@ -1874,27 +1872,58 @@ async function sincronizarTodasLojas(){
   pgDashboard();
 }
 
-async function sincronizarSalvar(fid, yr, mo){
+// ── SALVAMENTO SEGURO ─────────────────────────────────────────────
+// Antes de enviar, lê a planilha e só substitui os funcionários que foram
+// alterados NESTE navegador. Os demais ficam como estão na planilha, então
+// um navegador desatualizado não apaga mais o trabalho de outro.
+let _pend=(()=>{try{return JSON.parse(localStorage.getItem('escalas_pendentes')||'{}');}catch(e){return {};}})();
+function _salvarPend(){try{localStorage.setItem('escalas_pendentes',JSON.stringify(_pend));}catch(e){}}
+function _temDias(d){return !!(d&&d.dias&&Object.keys(d.dias).length);}
+function marcarPendente(fid,yr,mo,empId){const g=`${fid}__${yr}__${mo}`;(_pend[g]=_pend[g]||{})[empId]=1;_salvarPend();}
+const _envTimers={};
+function agendarEnvio(fid,yr,mo,ms){
   if(!temSync()) return;
-  const emps = getFuncs(fid);
-  const dados = emps.map(e=>{
-    const k = chave(fid,yr,mo,e.id);
-    const d = escalaLocal[k] || {dias:{},qtd:0,qtdF:0,total:0};
-    return { empId:e.id, dias:d.dias||{}, qtd:d.qtd||0, qtdF:d.qtdF||0, total:d.total||0 };
-  });
+  const g=`${fid}__${yr}__${mo}`;
+  clearTimeout(_envTimers[g]);
+  atualizarStatusSync('💾 Salvando…');
+  _envTimers[g]=setTimeout(()=>enviarSeguro(fid,yr,mo),ms||1500);
+}
+async function enviarSeguro(fid, yr, mo){
+  if(!temSync()) return false;
+  const g=`${fid}__${yr}__${mo}`;
+  const alterados=Object.keys(_pend[g]||{});
   try{
-    const resp = await fetch(SCRIPT_URL, {
-      method:'POST',
-      body: JSON.stringify({ action:'salvar', fid, yr, mo, dados }),
-    });
-    const json = await resp.json();
-    _lastSync = new Date();
-    atualizarStatusSync('✅ Salvo em ' + _lastSync.toLocaleTimeString('pt-BR'));
-    return json;
+    const r=await fetch(`${SCRIPT_URL}?action=ler&fid=${fid}&yr=${yr}&mo=${mo}`);
+    const j=await r.json();
+    if(!j||!j.ok) throw new Error('não consegui ler a planilha');
+    const srv={}; (j.dados||[]).forEach(e=>{srv[e.empId]=e;});
+    const ids=new Set(getFuncs(fid).map(e=>e.id));
+    Object.keys(srv).forEach(id=>ids.add(id));        // nunca remove linhas da planilha
+    const dados=[];
+    for(const id of ids){
+      const k=chave(fid,yr,mo,id), loc=escalaLocal[k], s=srv[id];
+      let use;
+      if(alterados.includes(id)) use=loc||{dias:{}};   // alterado aqui: vale o deste navegador
+      else if(_temDias(s)){                              // não alterado: vale a planilha
+        use=s; escalaLocal[k]={dias:s.dias,qtd:s.qtd||0,qtdF:s.qtdF||0,total:s.total||0};
+      }
+      else use=_temDias(loc)?loc:(s||{dias:{}});         // planilha vazia: não perde o local
+      dados.push({empId:id,dias:use.dias||{},qtd:use.qtd||0,qtdF:use.qtdF||0,total:use.total||0});
+    }
+    const resp=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'salvar',fid,yr,mo,dados})});
+    const jr=await resp.json().catch(()=>({}));
+    if(jr&&jr.ok===false) throw new Error(jr.erro||jr.error||'planilha recusou');
+    delete _pend[g]; _salvarPend(); salvarLocal();
+    _lastSync=new Date();
+    atualizarStatusSync('✅ Salvo na planilha '+_lastSync.toLocaleTimeString('pt-BR'));
+    return true;
   }catch(err){
-    atualizarStatusSync('⚠️ Sem conexão — dado salvo localmente');
+    atualizarStatusSync('⚠️ Ainda não salvou na planilha — nova tentativa em 30s');
+    agendarEnvio(fid,yr,mo,30000);
+    return false;
   }
 }
+async function sincronizarSalvar(fid, yr, mo){ return enviarSeguro(fid, yr, mo); }
 
 async function sincronizarCarregar(fid, yr, mo){
   if(!temSync()) return false;
@@ -1903,8 +1932,13 @@ async function sincronizarCarregar(fid, yr, mo){
     const resp = await fetch(url);
     const json = await resp.json();
     if(json.ok && json.dados){
+      const g=`${fid}__${yr}__${mo}`; let reenviar=false;
       for(const emp of json.dados){
         const k = chave(fid,yr,mo,emp.empId);
+        // Alteração deste navegador ainda não enviada: mantém a local
+        if(_pend[g] && _pend[g][emp.empId]){ reenviar=true; continue; }
+        // Planilha vazia mas navegador tem escala: mantém e envia, em vez de apagar
+        if(!_temDias(emp) && _temDias(escalaLocal[k])){ marcarPendente(fid,yr,mo,emp.empId); reenviar=true; continue; }
         const empData = getFuncs(fid).find(e=>e.id===emp.empId);
         // Corrige dias D→X para estoquistas/mensalistas
         const dias = emp.dias||{};
@@ -1921,6 +1955,7 @@ async function sincronizarCarregar(fid, yr, mo){
         escalaLocal[k] = { dias, qtd:emp.qtd||0, qtdF:emp.qtdF||0, total };
       }
       salvarLocal();
+      if(reenviar) agendarEnvio(fid,yr,mo);
       _lastSync = new Date();
       atualizarStatusSync('🔄 Atualizado ' + _lastSync.toLocaleTimeString('pt-BR'));
       return true;
@@ -2042,6 +2077,8 @@ if(Object.keys(escalaLocal).length===0 && temSync()){
   });
 }
 showPage(_lojaMode?'escala':'dashboard');
+// Reenvia alterações que não chegaram à planilha
+setTimeout(()=>{Object.keys(_pend).forEach(g=>{const [f,y,m]=g.split('__');agendarEnvio(f,+y,+m,500);});},3000);
 </script>
 </body>
 </html>
