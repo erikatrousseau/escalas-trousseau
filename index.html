@@ -1898,15 +1898,20 @@ async function sincronizarCarregar(fid, yr, mo){
     if(json.ok && json.dados){
       for(const emp of json.dados){
         const k = chave(fid,yr,mo,emp.empId);
-        // Recalcula total com os valores atuais do cadastro
         const empData = getFuncs(fid).find(e=>e.id===emp.empId);
+        // Corrige dias D→X para estoquistas/mensalistas
+        const dias = emp.dias||{};
+        if(empData && ['estoquista_loja','mensalista'].includes(empData.tipo)){
+          Object.keys(dias).forEach(d=>{ if(dias[d]==='D') dias[d]='X'; });
+        }
+        // Recalcula total com rates atuais
         let total = emp.total||0;
         if(empData){
           const rates = getRates(empData,yr,mo);
-          const calc = calcTotal(emp.dias||{},rates);
+          const calc = calcTotal(dias,rates);
           total = calc.total;
         }
-        escalaLocal[k] = { dias:emp.dias||{}, qtd:emp.qtd||0, qtdF:emp.qtdF||0, total };
+        escalaLocal[k] = { dias, qtd:emp.qtd||0, qtdF:emp.qtdF||0, total };
       }
       salvarLocal();
       _lastSync = new Date();
