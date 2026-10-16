@@ -516,6 +516,15 @@ function pgDashboard(){
     Para centralizar: use <strong>Pedido VR → Exportar CSV</strong>.
   </div>`;
 
+  // ── Se não tem dados locais, carrega do servidor primeiro ────
+  const temDados=Object.keys(escalaLocal).some(k=>k.includes(`__${yr}__${mo}__`));
+  if(!temDados && temSync()){
+    const fids=Object.keys(FILIAIS);
+    fids.reduce((p,fid)=>p.then(()=>sincronizarCarregar(fid,yr,mo)),Promise.resolve()).then(()=>{
+      salvarLocal(); pgDashboard();
+    });
+    return;
+  }
   // ── Calcula em segundo plano sem travar a tela ───────────────
   setTimeout(()=>{
     let totalFuncs=0,totalVR=0,totalDias=0,totalFer=0;
