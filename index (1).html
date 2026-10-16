@@ -516,15 +516,6 @@ function pgDashboard(){
     Para centralizar: use <strong>Pedido VR → Exportar CSV</strong>.
   </div>`;
 
-  // ── Se não tem dados locais, carrega do servidor primeiro ────
-  const temDados=Object.keys(escalaLocal).some(k=>k.includes(`__${yr}__${mo}__`));
-  if(!temDados && temSync()){
-    const fids=Object.keys(FILIAIS);
-    fids.reduce((p,fid)=>p.then(()=>sincronizarCarregar(fid,yr,mo)),Promise.resolve()).then(()=>{
-      salvarLocal(); pgDashboard();
-    });
-    return;
-  }
   // ── Calcula em segundo plano sem travar a tela ───────────────
   setTimeout(()=>{
     let totalFuncs=0,totalVR=0,totalDias=0,totalFer=0;
@@ -2041,6 +2032,15 @@ function salvarConfigSync(){
 carregarLocal();
 carregarFiliaisCustom();
 buildNav();
+// Se localStorage vazio, tenta carregar do Google Sheets em background
+if(Object.keys(escalaLocal).length===0 && temSync()){
+  const _fids=Object.keys(FILIAIS);
+  const _yr=currentYear, _mo=currentMonth;
+  _fids.reduce((p,fid)=>p.then(()=>sincronizarCarregar(fid,_yr,_mo)),Promise.resolve()).then(()=>{
+    salvarLocal();
+    if(document.getElementById('dash-tabela')) pgDashboard();
+  });
+}
 showPage(_lojaMode?'escala':'dashboard');
 </script>
 </body>
