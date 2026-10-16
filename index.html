@@ -79,6 +79,8 @@ label{font-size:11px;font-weight:600;color:var(--sub);display:block;margin-botto
 .day-cell.val-X{background:#27AE60;color:#fff}.day-cell.val-D{background:#E74C3C;color:#fff}
 .day-cell.val-S{background:#2980B9;color:#fff}.day-cell.val-F{background:#FF6B35;color:#fff}
 .day-cell.val-FOL{background:#95A5A6;color:#fff;font-size:8px}
+.day-cell.val-DF{background:#8E1B10;color:#fff;font-size:9px}.day-cell.val-DS{background:#F1948A;color:#fff;font-size:9px}
+.day-cell.val-FF{background:#A04000;color:#fff;font-size:9px}.day-cell.val-FS{background:#F5B041;color:#fff;font-size:9px}
 .sum-qtd{background:var(--gnb);color:var(--gn);font-weight:700;font-size:11px;padding:4px 5px}
 .sum-fer{background:var(--orb);color:#7F6000;font-weight:700;font-size:11px;padding:4px 5px}
 .sum-total{background:var(--db);color:#fff;font-weight:700;font-size:11px;padding:4px 6px;min-width:68px}
@@ -260,8 +262,8 @@ function calcTotal(dias, rates){
     const u=(v||'').toUpperCase();
     if(u==='X') qtdX++;
     else if(u==='S') qtdS++;
-    else if(u==='D') qtdD++;
-    else if(u==='F') qtdF++;
+    else if(u==='D'||u==='DF') qtdD++;   // DF: estava escalada e foi paga; desconta no mês seguinte
+    else if(u==='F'||u==='FF') qtdF++;   // FF: idem para feriado
   });
   const rateX = rates.rateX||rates.rateD||0;
   const rateS = rates.rateS||rates.rateD||0;
@@ -269,6 +271,33 @@ function calcTotal(dias, rates){
   const rateF = rates.rateF||0;
   const total = rates.fixo + qtdX*rateX + qtdS*rateS + qtdD*rateD + qtdF*rateF;
   return {qtd:qtdX+qtdS+qtdD, qtdX, qtdS, qtdD, qtdF, total};
+}
+// ── AJUSTE DE DOMINGO/FERIADO (troca de quem trabalhou) ──────────
+// No mês seguinte: DF/FF descontam o valor do dia; DS/FS pagam o valor do dia.
+// Se o desconto passar do VR do mês, o mês fica zerado e o restante vai para o próximo.
+function _mesAnt(yr,mo){return mo===1?[yr-1,12]:[yr,mo-1];}
+function ajusteDoMes(fid,yr,mo,emp,_n){
+  _n=_n||0; if(!emp||_n>12) return 0;
+  const [py,pm]=_mesAnt(yr,mo);
+  const d=getDias(fid,py,pm,emp.id); const r=getRates(emp,py,pm);
+  const vD=r.rateD||r.rateX||0, vF=r.rateF||0; let aj=0;
+  Object.values(d).forEach(v=>{const u=(v||'').toUpperCase();
+    if(u==='DS')aj+=vD; else if(u==='DF')aj-=vD; else if(u==='FS')aj+=vF; else if(u==='FF')aj-=vF;});
+  const saldoAnt=_totalBruto(fid,py,pm,emp,_n+1);          // saldo negativo do mês anterior
+  if(saldoAnt<0) aj+=saldoAnt;
+  return Math.round(aj*100)/100;
+}
+function _totalBruto(fid,yr,mo,emp,_n){
+  if((_n||0)>12) return 0;
+  const base=calcTotal(getDias(fid,yr,mo,emp.id),getRates(emp,yr,mo)).total;
+  return base+ajusteDoMes(fid,yr,mo,emp,_n);
+}
+// Valor a receber no mês (nunca negativo) e o ajuste aplicado
+function totalComAjuste(fid,yr,mo,emp){
+  const base=calcTotal(getDias(fid,yr,mo,emp.id),getRates(emp,yr,mo)).total;
+  const aj=ajusteDoMes(fid,yr,mo,emp);
+  const bruto=base+aj;
+  return {base, ajuste:aj, total:Math.max(0,bruto), saldoProx:Math.min(0,bruto)};
 }
 function getDias(fid,yr,mo,empId){return(escalaLocal[chave(fid,yr,mo,empId)]||{}).dias||{};}
 
@@ -395,7 +424,7 @@ function pgDashboard(){
         Object.values(d).forEach(v=>{const u=(v||'').toUpperCase();if(['X','D','S'].includes(u))q++;if(u==='F')qf++;});
         const rates_=getRates(e,yr,mo);
         const calc_=calcTotal(d,rates_);
-        ft+=calc_.total;fd+=calc_.qtd;ff+=calc_.qtdF;
+        ft+=totalComAjuste(fid,yr,mo,e).total;fd+=calc_.qtd;ff+=calc_.qtdF;
       }
       totalVR+=ft;totalDias+=fd;totalFer+=ff;
       resumos.push({fid,fcfg,n:emps.length,ft,fd,ff});
@@ -424,15 +453,15 @@ function pgDashboard(){
 
 // ── POPUP DE SELEÇÃO ──────────────────────────────────────────────
 const OPCOES={
-  vendedora:   [{v:'X',l:'Dia trabalhado',bg:'#27AE60'},{v:'D',l:'Domingo',bg:'#E74C3C'},{v:'F',l:'Feriado',bg:'#FF6B35'},{v:'FOL',l:'Folga',bg:'#95A5A6'}],
-  mensalista:  [{v:'X',l:'Dia trabalhado',bg:'#27AE60'},{v:'F',l:'Feriado',bg:'#FF6B35'},{v:'FOL',l:'Folga',bg:'#95A5A6'}],
-  estoquista:  [{v:'X',l:'Dia trabalhado',bg:'#27AE60'},{v:'F',l:'Feriado',bg:'#FF6B35'},{v:'FOL',l:'Folga',bg:'#95A5A6'}],
-  rj_vendedora:[{v:'X',l:'Dia trabalhado',bg:'#27AE60'},{v:'S',l:'Sábado',bg:'#2980B9'},{v:'D',l:'Domingo',bg:'#E74C3C'},{v:'F',l:'Feriado',bg:'#FF6B35'},{v:'FOL',l:'Folga',bg:'#95A5A6'}],
-  rj_staff:    [{v:'X',l:'Dia trabalhado',bg:'#27AE60'},{v:'S',l:'Sábado',bg:'#2980B9'},{v:'D',l:'Domingo',bg:'#E74C3C'},{v:'F',l:'Feriado',bg:'#FF6B35'},{v:'FOL',l:'Folga',bg:'#95A5A6'}],
-  angra:       [{v:'X',l:'Dia trabalhado',bg:'#27AE60'},{v:'F',l:'Feriado',bg:'#FF6B35'},{v:'FOL',l:'Folga',bg:'#95A5A6'}],
-  misto:       [{v:'X',l:'Dia trabalhado',bg:'#27AE60'},{v:'D',l:'Domingo',bg:'#E74C3C'},{v:'F',l:'Feriado',bg:'#FF6B35'},{v:'FOL',l:'Folga',bg:'#95A5A6'}],
-  estoquista_loja:[{v:'X',l:'Dia trabalhado',bg:'#27AE60'},{v:'D',l:'Domingo',bg:'#E74C3C'},{v:'F',l:'Feriado',bg:'#FF6B35'},{v:'FOL',l:'Folga',bg:'#95A5A6'}],
-  rj_estoquista:  [{v:'X',l:'Dia trabalhado',bg:'#27AE60'},{v:'S',l:'Sábado',bg:'#2980B9'},{v:'D',l:'Domingo',bg:'#E74C3C'},{v:'F',l:'Feriado',bg:'#FF6B35'},{v:'FOL',l:'Folga',bg:'#95A5A6'}],
+  vendedora:   [{v:'X',l:'Dia trabalhado',bg:'#27AE60'},{v:'D',l:'Domingo',bg:'#E74C3C'},{v:'DF',l:'Domingo — faltou (desconta mês seg.)',bg:'#8E1B10'},{v:'DS',l:'Domingo — substituiu (paga mês seg.)',bg:'#F1948A'},{v:'F',l:'Feriado',bg:'#FF6B35'},{v:'FF',l:'Feriado — faltou (desconta mês seg.)',bg:'#A04000'},{v:'FS',l:'Feriado — substituiu (paga mês seg.)',bg:'#F5B041'},{v:'FOL',l:'Folga',bg:'#95A5A6'}],
+  mensalista:  [{v:'X',l:'Dia trabalhado',bg:'#27AE60'},{v:'F',l:'Feriado',bg:'#FF6B35'},{v:'FF',l:'Feriado — faltou (desconta mês seg.)',bg:'#A04000'},{v:'FS',l:'Feriado — substituiu (paga mês seg.)',bg:'#F5B041'},{v:'FOL',l:'Folga',bg:'#95A5A6'}],
+  estoquista:  [{v:'X',l:'Dia trabalhado',bg:'#27AE60'},{v:'F',l:'Feriado',bg:'#FF6B35'},{v:'FF',l:'Feriado — faltou (desconta mês seg.)',bg:'#A04000'},{v:'FS',l:'Feriado — substituiu (paga mês seg.)',bg:'#F5B041'},{v:'FOL',l:'Folga',bg:'#95A5A6'}],
+  rj_vendedora:[{v:'X',l:'Dia trabalhado',bg:'#27AE60'},{v:'S',l:'Sábado',bg:'#2980B9'},{v:'D',l:'Domingo',bg:'#E74C3C'},{v:'DF',l:'Domingo — faltou (desconta mês seg.)',bg:'#8E1B10'},{v:'DS',l:'Domingo — substituiu (paga mês seg.)',bg:'#F1948A'},{v:'F',l:'Feriado',bg:'#FF6B35'},{v:'FF',l:'Feriado — faltou (desconta mês seg.)',bg:'#A04000'},{v:'FS',l:'Feriado — substituiu (paga mês seg.)',bg:'#F5B041'},{v:'FOL',l:'Folga',bg:'#95A5A6'}],
+  rj_staff:    [{v:'X',l:'Dia trabalhado',bg:'#27AE60'},{v:'S',l:'Sábado',bg:'#2980B9'},{v:'D',l:'Domingo',bg:'#E74C3C'},{v:'DF',l:'Domingo — faltou (desconta mês seg.)',bg:'#8E1B10'},{v:'DS',l:'Domingo — substituiu (paga mês seg.)',bg:'#F1948A'},{v:'F',l:'Feriado',bg:'#FF6B35'},{v:'FF',l:'Feriado — faltou (desconta mês seg.)',bg:'#A04000'},{v:'FS',l:'Feriado — substituiu (paga mês seg.)',bg:'#F5B041'},{v:'FOL',l:'Folga',bg:'#95A5A6'}],
+  angra:       [{v:'X',l:'Dia trabalhado',bg:'#27AE60'},{v:'F',l:'Feriado',bg:'#FF6B35'},{v:'FF',l:'Feriado — faltou (desconta mês seg.)',bg:'#A04000'},{v:'FS',l:'Feriado — substituiu (paga mês seg.)',bg:'#F5B041'},{v:'FOL',l:'Folga',bg:'#95A5A6'}],
+  misto:       [{v:'X',l:'Dia trabalhado',bg:'#27AE60'},{v:'D',l:'Domingo',bg:'#E74C3C'},{v:'DF',l:'Domingo — faltou (desconta mês seg.)',bg:'#8E1B10'},{v:'DS',l:'Domingo — substituiu (paga mês seg.)',bg:'#F1948A'},{v:'F',l:'Feriado',bg:'#FF6B35'},{v:'FF',l:'Feriado — faltou (desconta mês seg.)',bg:'#A04000'},{v:'FS',l:'Feriado — substituiu (paga mês seg.)',bg:'#F5B041'},{v:'FOL',l:'Folga',bg:'#95A5A6'}],
+  estoquista_loja:[{v:'X',l:'Dia trabalhado',bg:'#27AE60'},{v:'D',l:'Domingo',bg:'#E74C3C'},{v:'DF',l:'Domingo — faltou (desconta mês seg.)',bg:'#8E1B10'},{v:'DS',l:'Domingo — substituiu (paga mês seg.)',bg:'#F1948A'},{v:'F',l:'Feriado',bg:'#FF6B35'},{v:'FF',l:'Feriado — faltou (desconta mês seg.)',bg:'#A04000'},{v:'FS',l:'Feriado — substituiu (paga mês seg.)',bg:'#F5B041'},{v:'FOL',l:'Folga',bg:'#95A5A6'}],
+  rj_estoquista:  [{v:'X',l:'Dia trabalhado',bg:'#27AE60'},{v:'S',l:'Sábado',bg:'#2980B9'},{v:'D',l:'Domingo',bg:'#E74C3C'},{v:'DF',l:'Domingo — faltou (desconta mês seg.)',bg:'#8E1B10'},{v:'DS',l:'Domingo — substituiu (paga mês seg.)',bg:'#F1948A'},{v:'F',l:'Feriado',bg:'#FF6B35'},{v:'FF',l:'Feriado — faltou (desconta mês seg.)',bg:'#A04000'},{v:'FS',l:'Feriado — substituiu (paga mês seg.)',bg:'#F5B041'},{v:'FOL',l:'Folga',bg:'#95A5A6'}],
 };
 let _popup=null;
 function openPicker(cell,tipo,dia,wdName,fid,empId,yr,mo){
@@ -501,6 +530,8 @@ function updateRowTotals(fid,empId,yr,mo){
   }
   const eqEl=document.getElementById(`eq_${empId}`);if(eqEl)eqEl.textContent=qtd||'';
   const efEl=document.getElementById(`ef_${empId}`);if(efEl)efEl.textContent=qtdF||'';
+  if(emp){ const tca=totalComAjuste(fid,yr,mo,emp); total=tca.total;
+    const eaEl=document.getElementById(`ea_${empId}`); if(eaEl){eaEl.textContent=tca.ajuste?(tca.ajuste>0?'+':'')+tca.ajuste.toFixed(2):''; eaEl.style.color=tca.ajuste<0?'#C0392B':'#1E8449';} }
   const etEl=document.getElementById(`et_${empId}`);if(etEl)etEl.textContent=total?'R$'+total.toFixed(2):'';
 }
 
@@ -566,6 +597,8 @@ function _renderGradeInternal(fid,yr,mo){
     (isRJ&&temS?dot('S','#2980B9','Sábado (RJ)'):'')+
     dot('F','#FF6B35','Feriado trabalhado')+
     dot('FOL','#95A5A6','Folga')+
+    (temD?dot('DF','#8E1B10','Dom. faltou (−mês seg.)')+dot('DS','#F1948A','Dom. substituiu (+mês seg.)'):'')+
+    dot('FF','#A04000','Fer. faltou (−mês seg.)')+dot('FS','#F5B041','Fer. substituiu (+mês seg.)')+
     (temD?box('var(--dom)','Domingo'):'')+(isRJ&&temS?box('var(--sab)','Sábado'):'')+
     box('var(--fer)','Feriado (fundo)');
 
@@ -585,7 +618,8 @@ function _renderGradeInternal(fid,yr,mo){
     const dias=getDias(fid,yr,mo,e.id);
     const rates=getRates(e,yr,mo);
     const calc=calcTotal(dias,rates);
-    const qtd=calc.qtd, qtdF=calc.qtdF, total=calc.total;
+    const tca=totalComAjuste(fid,yr,mo,e);
+    const qtd=calc.qtd, qtdF=calc.qtdF, total=tca.total;
     rows+=`<tr>
       <td class="col-nome">${e.nome}</td>
       <td class="col-func">${e.funcao}</td>`;
@@ -598,14 +632,15 @@ function _renderGradeInternal(fid,yr,mo){
     }
     rows+=`<td class="sum-qtd" id="eq_${e.id}">${qtd||''}</td>
       <td class="sum-fer" id="ef_${e.id}">${qtdF||''}</td>
+      <td class="sum-fer" id="ea_${e.id}" style="color:${tca.ajuste<0?'#C0392B':'#1E8449'}" title="${tca.saldoProx<0?'Saldo a descontar no próximo mês: R$ '+(-tca.saldoProx).toFixed(2):''}">${tca.ajuste?(tca.ajuste>0?'+':'')+tca.ajuste.toFixed(2):''}</td>
       <td class="sum-total" id="et_${e.id}">R$${total.toFixed(2)}</td>
     </tr>`;
   }
   // auto sync removed
   wrap.innerHTML=`<table class="escala-table">
     <thead>
-      <tr><th class="col-nome" rowspan="2">FUNCIONÁRIO</th><th class="col-func" rowspan="2">FUNÇÃO</th>${thDias}<th class="day-header" style="background:var(--gn)">Qtd</th><th class="day-header" style="background:#FF6B35">Fer</th><th class="day-header" style="background:var(--db);min-width:68px">Total R$</th></tr>
-      <tr>${thWd}<th></th><th></th><th></th></tr>
+      <tr><th class="col-nome" rowspan="2">FUNCIONÁRIO</th><th class="col-func" rowspan="2">FUNÇÃO</th>${thDias}<th class="day-header" style="background:var(--gn)">Qtd</th><th class="day-header" style="background:#FF6B35">Fer</th><th class="day-header" style="background:#7D3C98;min-width:60px" title="Ajuste de domingo/feriado do mês anterior">Ajuste</th><th class="day-header" style="background:var(--db);min-width:68px">Total R$</th></tr>
+      <tr>${thWd}<th></th><th></th><th></th><th></th></tr>
     </thead>
     <tbody>${rows}</tbody>
   </table>`;
@@ -617,7 +652,7 @@ function exportarEscala(){
   const emps=getFuncsAtivos(fid,yr,mo)||[];
   const hol=getHol(yr,fid);const dc=daysInMonth(yr,mo);
   const fcfg=FILIAIS[fid];
-  const CORES={X:'#27AE60',D:'#E74C3C',S:'#2980B9',F:'#FF6B35',FOL:'#95A5A6'};
+  const CORES={X:'#27AE60',D:'#E74C3C',S:'#2980B9',F:'#FF6B35',FOL:'#95A5A6',DF:'#8E1B10',DS:'#F1948A',FF:'#A04000',FS:'#F5B041'};
   let thD='',thW='',linhas='';
   for(let d=1;d<=dc;d++){
     const wd=weekday(yr,mo,d),isH=hol[`${mo}-${d}`];
@@ -640,7 +675,7 @@ function exportarEscala(){
     }
     const rates_e=getRates(e,currentYear,currentMonth);
     const calc_e=calcTotal(dias,rates_e);
-    qtd=calc_e.qtd;qtdF=calc_e.qtdF;const total=calc_e.total;
+    qtd=calc_e.qtd;qtdF=calc_e.qtdF;const total=totalComAjuste(fid,currentYear,currentMonth,e).total;
     linhas+=`<tr><td style="font-size:10px;font-weight:600;color:#1F3864;padding:4px 7px;border:1px solid #ddd;white-space:nowrap">${e.nome}</td>
       <td style="font-size:9px;color:#666;padding:4px 5px;border:1px solid #ddd;text-align:center">${e.funcao}</td>
       ${cels}
@@ -714,11 +749,13 @@ function pgVR(){
       const dias=getDias(fid,yr,mo,e.id);
       const rates_v=getRates(e,yr,mo);
       const calc_v=calcTotal(dias,rates_v);
-      const qtd=calc_v.qtd,qtdF=calc_v.qtdF,total=calc_v.total;
+      const tca_v=totalComAjuste(fid,yr,mo,e);
+      const qtd=calc_v.qtd,qtdF=calc_v.qtdF,total=tca_v.total;
       subTotal+=total;
       rowsHtml+=`<tr><td><strong>${e.nome}</strong></td><td>${e.funcao}</td>
         <td><span class="badge badge-green">${qtd}</span></td>
         <td><span class="badge badge-orange">${qtdF}</span></td>
+        <td style="color:${tca_v.ajuste<0?'#C0392B':'#1E8449'};font-weight:700">${tca_v.ajuste?(tca_v.ajuste>0?'+':'')+'R$ '+tca_v.ajuste.toFixed(2):'—'}</td>
         <td><strong style="color:${total>0?'var(--gn)':'var(--sub)'}">${total?'R$ '+total.toFixed(2):'—'}</strong></td>
       </tr>`;
     }
@@ -727,7 +764,7 @@ function pgVR(){
       <div style="background:${fcfg.cor};color:#fff;padding:7px 12px;border-radius:6px 6px 0 0;font-weight:700;font-size:12px;display:flex;justify-content:space-between">
         <span>${fcfg.label}</span><span>R$ ${subTotal.toFixed(2)}</span></div>
       <table class="data-table" style="border-radius:0 0 6px 6px;overflow:hidden">
-        <thead><tr><th>Nome</th><th>Função</th><th>Dom/Dias</th><th>Feriados</th><th>VR (R$)</th></tr></thead>
+        <thead><tr><th>Nome</th><th>Função</th><th>Dom/Dias</th><th>Feriados</th><th>Ajuste mês ant.</th><th>VR (R$)</th></tr></thead>
         <tbody>${rowsHtml}</tbody>
       </table></div>`;
   }
@@ -754,7 +791,7 @@ async function exportCSV(){
       const dias=getDias(fid,yr,mo,e.id);
       let qtd=0,qtdF=0;
       Object.values(dias).forEach(v=>{const u=(v||'').toUpperCase();if(['X','D','S'].includes(u))qtd++;if(u==='F')qtdF++;});
-      const rates_c=getRates(e,yr,mo);const total=calcTotal(dias,rates_c).total;
+      const total=totalComAjuste(fid,yr,mo,e).total;
       csv+=`669345550001-19;${e.nome};${e.cpf||''};${e.email||''};${e.tel||''};${FILIAIS[fid].label};${total.toFixed(2).replace('.',',')}\n`;
     }
   }
