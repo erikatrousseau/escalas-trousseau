@@ -330,14 +330,14 @@ function getRates(emp, yr, mo){
     const ini = h.de_yr*100+h.de_mo;
     const fim = h.ate_yr*100+h.ate_mo;
     if(yrmo >= ini && yrmo < fim){
-      return { rateX: h.rate_x||baseRates.rateX, rateD: h.rate_d||0, rateF: h.rate_f||0, fixo: h.rate_fixo||fixo };
+      return { rateX: h.rate_x||baseRates.rateX, rateD: h.rate_d||0, rateS: h.rate_sdf||h.rate_d||0, rateF: h.rate_f||0, fixo: (h.rate_fixo!=null?h.rate_fixo:fixo) };
     }
   }
   return baseRates;
 }
 
 // ── NAV ───────────────────────────────────────────────────────────
-const PAGES_ALL=[{id:'dashboard',label:'Dashboard'},{id:'escala',label:'Escala'},{id:'vr',label:'Pedido VR'},{id:'historico',label:'Histórico'},{id:'gestao',label:'⚙️ Gestão'}];
+const PAGES_ALL=[{id:'dashboard',label:'Dashboard'},{id:'escala',label:'Escala'},{id:'vr',label:'Pedido VR'},{id:'historico',label:'Histórico'},{id:'dissidio',label:'📈 Dissídio'},{id:'gestao',label:'⚙️ Gestão'}];
 const PAGES_LOJA=[{id:'escala',label:'Escala'},{id:'vr',label:'Pedido VR'}];
 
 function buildNav(){
@@ -350,9 +350,9 @@ function buildNav(){
 function showPage(page){
   if(page!=='escala') pararAutoSync();
   document.querySelectorAll('.nav-pill').forEach(b=>{
-    b.classList.toggle('active',b.textContent===({dashboard:'Dashboard',escala:'Escala',vr:'Pedido VR',historico:'Histórico'}[page]||''));
+    b.classList.toggle('active',b.textContent===({dashboard:'Dashboard',escala:'Escala',vr:'Pedido VR',historico:'Histórico',dissidio:'📈 Dissídio'}[page]||''));
   });
-  const fns={dashboard:pgDashboard,escala:pgEscala,vr:pgVR,historico:pgHistorico,gestao:pgGestao};
+  const fns={dashboard:pgDashboard,escala:pgEscala,vr:pgVR,historico:pgHistorico,dissidio:pgDissidio,gestao:pgGestao};
   (fns[page]||pgDashboard)();
 }
 
@@ -800,6 +800,145 @@ async function exportCSV(){
   const a=document.createElement('a');a.href=url;a.download=`PedidoVR_${MONTHS[mo-1]}_${yr}.csv`;
   document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},1000);
   showAlert('CSV exportado com sucesso!');
+}
+
+
+// ── DIFERENÇA DE DISSÍDIO ─────────────────────────────────────────
+// Recalcula os meses já pagos com os valores novos da convenção e mostra
+// a diferença a pagar por funcionário. Pode aplicar os valores novos no cadastro.
+const _DS_CAMPOS=[['rate_x','Dia (X)','rateX'],['rate_sdf','Sábado (S)','rateS'],['rate_d','Domingo (D)','rateD'],['rate_f','Feriado (F)','rateF'],['rate_fixo','Fixo mensal','fixo']];
+const _DS_GRUPOS={SP:f=>f.startsWith('SP_')||f==='BV',BH:f=>f.startsWith('BH_'),RJ:f=>f.startsWith('RJ_'),DF:f=>f==='BSB'};
+let _dsRes=null;
+function _dsMeses(y1,m1,y2,m2){const r=[];let y=y1,m=m1;while(y*100+m<=y2*100+m2){r.push([y,m]);m++;if(m>12){m=1;y++;}}return r;}
+function _dsLojasSel(){return [...document.querySelectorAll('.ds-loja:checked')].map(c=>c.value);}
+function _dsTipoLabel(t){return {vendedora:'Vendedora',rj_vendedora:'Vendedora RJ',estoquista_loja:'Estoquista/Caixa',rj_estoquista:'Estoquista RJ',mensalista:'Mensalista',estoquista:'Estoquista',misto:'Misto',rj_staff:'Staff RJ',angra:'Angra'}[t]||t;}
+function pgDissidio(){
+  const main=document.getElementById('main-content');
+  const hoje=new Date(),y=hoje.getFullYear();
+  const mOpt=(sel)=>MONTHS.map((n,i)=>`<option value="${i+1}" ${i+1===sel?'selected':''}>${n}</option>`).join('');
+  const yOpt=(sel)=>[y-1,y,y+1].map(v=>`<option ${v===sel?'selected':''}>${v}</option>`).join('');
+  const lojas=Object.entries(FILIAIS).map(([k,v])=>`<label style="display:inline-flex;gap:4px;align-items:center;margin:2px 10px 2px 0;font-size:12px"><input type="checkbox" class="ds-loja" value="${k}" ${_DS_GRUPOS.SP(k)?'checked':''} onchange="dsMontarValores()">${v.label}</label>`).join('');
+  main.innerHTML=`<div class="card">
+    <div class="section-title">📈 Diferença de Dissídio</div>
+    <div style="font-size:12px;color:var(--sub);margin-bottom:10px">Informe o período que já foi pago com o valor antigo e os valores novos da convenção. O sistema recalcula cada mês com as escalas gravadas e mostra a diferença a pagar.</div>
+    <div style="margin-bottom:8px"><strong style="font-size:12px">Lojas:</strong>
+      ${Object.keys(_DS_GRUPOS).map(g=>`<button class="btn btn-sm btn-outline" style="margin-left:6px" onclick="dsGrupo('${g}')">Só ${g}</button>`).join('')}</div>
+    <div style="margin-bottom:12px">${lojas}</div>
+    <div class="form-row">
+      <div class="form-group"><label>Retroativo desde (data-base)</label><div style="display:flex;gap:6px"><select id="ds-m1">${mOpt(9)}</select><select id="ds-y1">${yOpt(y)}</select></div></div>
+      <div class="form-group"><label>Até o mês (último pago com valor antigo)</label><div style="display:flex;gap:6px"><select id="ds-m2">${mOpt(hoje.getMonth()+1)}</select><select id="ds-y2">${yOpt(y)}</select></div></div>
+      <div class="form-group" style="max-width:190px"><label>Reajuste (%) — preenche tudo</label><div style="display:flex;gap:6px"><input id="ds-pct" type="number" step="0.01" placeholder="ex: 5,5"><button class="btn btn-sm btn-outline" onclick="dsAplicarPct()">Aplicar</button></div></div>
+    </div>
+    <div id="ds-valores"></div>
+    <div style="margin:12px 0;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="dsCalcular()">🧮 Calcular diferença</button>
+      <button class="btn btn-outline" onclick="dsExportar()">⬇️ CSV para o pedido</button>
+      <button class="btn btn-outline" onclick="dsExportar(true)">⬇️ CSV detalhado por mês</button>
+      <button class="btn btn-danger" onclick="dsAplicarCadastro()">✅ Aplicar valores novos no cadastro</button>
+    </div>
+    <div id="ds-resultado"></div>
+    <div id="ds-historico" style="margin-top:16px"></div>
+  </div>`;
+  dsMontarValores(); dsMostrarHistorico();
+}
+function dsGrupo(g){document.querySelectorAll('.ds-loja').forEach(c=>c.checked=_DS_GRUPOS[g](c.value));dsMontarValores();}
+// Lista cada valor atual (por tipo e campo) para informar o valor novo
+function dsMontarValores(){
+  const box=document.getElementById('ds-valores'); if(!box) return;
+  const grupos={};
+  for(const fid of _dsLojasSel()) for(const e of getFuncs(fid)) for(const [campo,nome] of _DS_CAMPOS){
+    const v=+e[campo]||0; if(!v) continue;
+    const k=`${e.tipo}|${campo}|${v}`; (grupos[k]=grupos[k]||{tipo:e.tipo,campo,nome,v,n:0}).n++;
+  }
+  const lst=Object.values(grupos).sort((a,b)=>a.tipo.localeCompare(b.tipo)||a.campo.localeCompare(b.campo)||a.v-b.v);
+  box.innerHTML=lst.length?`<table class="data-table"><thead><tr><th>Tipo</th><th>Valor</th><th>Pessoas</th><th>Atual (R$)</th><th>Novo (R$)</th></tr></thead><tbody>
+    ${lst.map(g=>`<tr><td>${_dsTipoLabel(g.tipo)}</td><td>${g.nome}</td><td>${g.n}</td><td>${g.v.toFixed(2)}</td>
+      <td><input class="ds-novo" data-k="${g.tipo}|${g.campo}|${g.v}" data-v="${g.v}" type="number" step="0.01" style="width:100px" placeholder="${g.v.toFixed(2)}"></td></tr>`).join('')}
+    </tbody></table><div style="font-size:11px;color:var(--sub);margin-top:4px">Deixe em branco o que não muda.</div>`:'<div style="color:var(--sub)">Nenhuma loja selecionada.</div>';
+}
+function dsAplicarPct(){
+  const p=parseFloat(String(document.getElementById('ds-pct').value).replace(',','.'));
+  if(isNaN(p)){showAlert('Informe o percentual.','error');return;}
+  document.querySelectorAll('.ds-novo').forEach(i=>{i.value=(Math.round(+i.dataset.v*(1+p/100)*100)/100).toFixed(2);});
+}
+function _dsMapa(){const m={};document.querySelectorAll('.ds-novo').forEach(i=>{if(i.value!=='')m[i.dataset.k]=parseFloat(String(i.value).replace(',','.'));});return m;}
+function _dsNovo(mapa,e,campo,velho){const k=`${e.tipo}|${campo}|${+e[campo]||0}`;return (k in mapa && (+velho)===(+e[campo]||0))?mapa[k]:velho;}
+function dsCalcular(){
+  const y1=+document.getElementById('ds-y1').value,m1=+document.getElementById('ds-m1').value;
+  const y2=+document.getElementById('ds-y2').value,m2=+document.getElementById('ds-m2').value;
+  if(y1*100+m1>y2*100+m2){showAlert('O período está invertido.','error');return;}
+  const mapa=_dsMapa(); if(!Object.keys(mapa).length){showAlert('Informe pelo menos um valor novo.','error');return;}
+  const meses=_dsMeses(y1,m1,y2,m2), lojas=_dsLojasSel(), linhas=[]; let semEscala=new Set();
+  for(const fid of lojas){
+    for(const e of getFuncs(fid)){
+      let dif=0; const det=[];
+      for(const [y,m] of meses){
+        if(!getFuncsAtivos(fid,y,m).some(x=>x.id===e.id)) continue;
+        const dias=getDias(fid,y,m,e.id); const r=getRates(e,y,m);
+        if(!Object.keys(dias).length && !r.fixo){ semEscala.add(`${MONTHS_ABR[m-1]}/${y}`); continue; }
+        const c=calcTotal(dias,r);
+        // valores pagos no mês x valores novos (só troca o que foi informado)
+        const nv={rateX:_dsNovo(mapa,e,'rate_x',r.rateX),rateS:_dsNovo(mapa,e,'rate_sdf',r.rateS),rateD:_dsNovo(mapa,e,'rate_d',r.rateD),rateF:_dsNovo(mapa,e,'rate_f',r.rateF),fixo:_dsNovo(mapa,e,'rate_fixo',r.fixo)};
+        const novo=calcTotal(dias,nv).total, d=Math.round((novo-c.total)*100)/100;
+        if(d){dif+=d; det.push({y,m,pago:c.total,novo,d});}
+      }
+      if(dif) linhas.push({fid,e,dif:Math.round(dif*100)/100,det});
+    }
+  }
+  _dsRes={y1,m1,y2,m2,lojas,mapa,linhas,quando:new Date().toISOString()};
+  const tot=linhas.reduce((s,l)=>s+l.dif,0);
+  const porLoja={}; linhas.forEach(l=>(porLoja[l.fid]=porLoja[l.fid]||[]).push(l));
+  document.getElementById('ds-resultado').innerHTML=`
+    <div class="alert alert-success" style="font-size:14px"><strong>Diferença total: R$ ${tot.toFixed(2)}</strong> — ${linhas.length} funcionário(s), de ${MONTHS[m1-1]}/${y1} a ${MONTHS[m2-1]}/${y2}</div>
+    ${semEscala.size?`<div class="alert alert-error" style="font-size:12px">ℹ️ Há funcionários sem nenhuma marcação nestes meses (confira se a escala foi lançada no sistema): ${[...semEscala].join(', ')}</div>`:''}
+    ${Object.entries(porLoja).map(([fid,ls])=>`<div style="margin-top:12px"><div style="background:${FILIAIS[fid].cor};color:#fff;padding:6px 10px;border-radius:6px 6px 0 0;font-weight:700;font-size:12px;display:flex;justify-content:space-between"><span>${FILIAIS[fid].label}</span><span>R$ ${ls.reduce((s,l)=>s+l.dif,0).toFixed(2)}</span></div>
+      <table class="data-table"><thead><tr><th>Nome</th><th>Função</th><th>Meses</th><th>Diferença</th></tr></thead><tbody>
+      ${ls.map(l=>`<tr><td><strong>${l.e.nome}</strong></td><td>${l.e.funcao}</td><td style="font-size:11px">${l.det.map(x=>`${MONTHS_ABR[x.m-1]}/${String(x.y).slice(2)}: ${x.pago.toFixed(2)} → ${x.novo.toFixed(2)}`).join('<br>')}</td><td><strong style="color:var(--gn)">R$ ${l.dif.toFixed(2)}</strong></td></tr>`).join('')}
+      </tbody></table></div>`).join('')}`;
+}
+async function dsExportar(detalhado){
+  if(!_dsRes){showAlert('Clique em Calcular primeiro.','error');return;}
+  let csv=detalhado?'LOJA;NOME;FUNCAO;MES;PAGO;NOVO;DIFERENCA\n':'CNPJ;NOME;CPF;EMAIL;TELEFONE;GRUPO;VALOR\n';
+  const porLoja={}; _dsRes.linhas.forEach(l=>(porLoja[l.fid]=porLoja[l.fid]||[]).push(l));
+  for(const [fid,ls] of Object.entries(porLoja)){
+    let emps=ls.map(l=>l.e); if(!detalhado && emps.some(e=>!e.cpf)) emps=_copiarContatos(emps, await _funcsServidor(fid));
+    ls.forEach((l,i)=>{const e=emps[i]||l.e;
+      if(detalhado) l.det.forEach(x=>{csv+=`${FILIAIS[fid].label};${e.nome};${e.funcao};${MONTHS_ABR[x.m-1]}/${x.y};${x.pago.toFixed(2).replace('.',',')};${x.novo.toFixed(2).replace('.',',')};${x.d.toFixed(2).replace('.',',')}\n`;});
+      else csv+=`669345550001-19;${e.nome};${e.cpf||''};${e.email||''};${e.tel||''};${FILIAIS[fid].label};${l.dif.toFixed(2).replace('.',',')}\n`;});
+  }
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));
+  a.download=`Dissidio_${MONTHS_ABR[_dsRes.m1-1]}${_dsRes.y1}_a_${MONTHS_ABR[_dsRes.m2-1]}${_dsRes.y2}${detalhado?'_detalhado':''}.csv`;a.click();
+  try{const h=JSON.parse(localStorage.getItem('dissidios')||'[]');h.unshift({quando:_dsRes.quando,periodo:`${MONTHS_ABR[_dsRes.m1-1]}/${_dsRes.y1} a ${MONTHS_ABR[_dsRes.m2-1]}/${_dsRes.y2}`,lojas:_dsRes.lojas,total:_dsRes.linhas.reduce((s,l)=>s+l.dif,0)});localStorage.setItem('dissidios',JSON.stringify(h.slice(0,30)));}catch(e){}
+  dsMostrarHistorico();
+}
+function dsMostrarHistorico(){
+  const el=document.getElementById('ds-historico'); if(!el) return;
+  let h=[];try{h=JSON.parse(localStorage.getItem('dissidios')||'[]');}catch(e){}
+  el.innerHTML=h.length?`<div class="section-title" style="font-size:13px">🗂️ Diferenças já exportadas (para não pagar duas vezes)</div>
+    <table class="data-table"><thead><tr><th>Exportado em</th><th>Período</th><th>Lojas</th><th>Total</th></tr></thead><tbody>
+    ${h.map(x=>`<tr><td>${new Date(x.quando).toLocaleString('pt-BR')}</td><td>${x.periodo}</td><td style="font-size:11px">${x.lojas.length} loja(s)</td><td>R$ ${(+x.total).toFixed(2)}</td></tr>`).join('')}</tbody></table>`:'';
+}
+// Passa a usar os valores novos a partir do mês seguinte ao período,
+// guardando os valores antigos no histórico para os meses já pagos.
+function dsAplicarCadastro(){
+  if(!_dsRes){showAlert('Clique em Calcular primeiro.','error');return;}
+  let [vy,vm]=[_dsRes.y2,_dsRes.m2+1]; if(vm>12){vm=1;vy++;}
+  if(!confirm(`Aplicar os valores novos a partir de ${MONTHS[vm-1]}/${vy}?\nOs meses anteriores continuam com os valores antigos (já pagos).`)) return;
+  let n=0;
+  for(const fid of _dsRes.lojas){
+    const emps=JSON.parse(JSON.stringify(getFuncs(fid))); let mudou=false;
+    for(const e of emps){
+      const novos={}; _DS_CAMPOS.forEach(([campo])=>{const k=`${e.tipo}|${campo}|${+e[campo]||0}`; if(k in _dsRes.mapa && _dsRes.mapa[k]!==(+e[campo]||0)) novos[campo]=_dsRes.mapa[k];});
+      if(!Object.keys(novos).length) continue;
+      const hist=(e.rate_historico||[]).filter(x=>x.de_yr*100+x.de_mo < x.ate_yr*100+x.ate_mo);
+      const ultFim=hist.reduce((mx,x)=>Math.max(mx,x.ate_yr*100+x.ate_mo),200001);
+      hist.push({de_yr:Math.floor(ultFim/100),de_mo:ultFim%100,ate_yr:vy,ate_mo:vm,rate_x:+e.rate_x||0,rate_d:+e.rate_d||0,rate_sdf:+e.rate_sdf||0,rate_f:+e.rate_f||0,rate_fixo:+e.rate_fixo||0});
+      e.rate_historico=hist; Object.assign(e,novos); e.rate_vig_yr=vy; e.rate_vig_mo=vm; mudou=true; n++;
+    }
+    if(mudou) setFuncsLocal(fid,emps);
+  }
+  showAlert(`✅ Valores novos aplicados para ${n} funcionário(s) a partir de ${MONTHS[vm-1]}/${vy}.`);
+  dsMontarValores();
 }
 
 // ── HISTÓRICO ─────────────────────────────────────────────────────
