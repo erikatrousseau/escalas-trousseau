@@ -244,7 +244,12 @@ let alertTO=null;
 // Detecta modo gestor por querystring ?loja=XX
 const _qp=new URLSearchParams(location.search);
 const _lp=_qp.get('loja');
-if(_lp&&FILIAIS[_lp]){currentFilial=_lp;_lojaMode=_lp;}
+if(_lp&&FILIAIS[_lp]){currentFilial=_lp;_lojaMode=_lp;
+  // Link da loja: a partir do dia 15 já abre o mês seguinte (escala que está sendo montada)
+  if(_now.getDate()>=15){currentMonth=_nowM===12?1:_nowM+1;currentYear=_nowM===12?_nowY+1:_nowY;}
+}
+// Mês/ano fixos no link: ?loja=XX&mes=11&ano=2026
+{const _qm=+_qp.get('mes'),_qa=+_qp.get('ano');if(_qm>=1&&_qm<=12)currentMonth=_qm;if(_qa>2000)currentYear=_qa;}
 
 // ── PERSISTÊNCIA LOCAL ────────────────────────────────────────────
 function salvarLocal(){try{localStorage.setItem('escalas_trousseau',JSON.stringify(escalaLocal));}catch(e){}}
@@ -574,6 +579,13 @@ function pgEscala(){
 function renderGrade(){
   const fid=currentFilial,yr=currentYear,mo=currentMonth;
   _renderGradeInternal(fid,yr,mo);
+  // Sempre busca a versão da planilha ao abrir a grade, para todos verem a mesma escala
+  if(temSync()){
+    atualizarStatusSync('🔄 Buscando escala da planilha…');
+    sincronizarCarregar(fid,yr,mo).then(ok=>{
+      if(ok && currentFilial===fid && currentYear===yr && currentMonth===mo) _renderGradeInternal(fid,yr,mo);
+    });
+  }
 }
 function _renderGradeInternal(fid,yr,mo){
   const emps=getFuncsAtivos(fid,yr,mo)||[];
