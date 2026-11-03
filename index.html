@@ -2164,10 +2164,16 @@ if(Object.keys(escalaLocal).length===0 && temSync()){
 showPage(_lojaMode?'escala':'dashboard');
 // Reenvia alterações que não chegaram à planilha
 setTimeout(()=>{Object.keys(_pend).forEach(g=>{const [f,y,m]=g.split('__');agendarEnvio(f,+y,+m,500);});},3000);
-  setTimeout(()=>{Object.keys(_pend).forEach(g=>{const [f,y,m]=g.split('__');agendarEnvio(f,+y,+m,500);});},3000);
-   </script>
-   </body>
-   </html>
+// ===== Cadastro de funcionários igual para todos (busca da planilha) =====
+async function _atualizarFuncsDeTodos(){
+  if(!temSync()) return;
+  await Promise.all(Object.keys(FILIAIS).map(f=>carregarFuncsServidor(f)));
+  try{ if(document.getElementById('lista-funcs')) renderListaFuncs(); }catch(e){}
+  try{ if(typeof _renderGradeInternal==='function' && document.querySelector('.grade, #grade, #grade-container')) _renderGradeInternal(currentFilial,currentYear,currentMonth); }catch(e){}
+}
+_atualizarFuncsDeTodos();
+setInterval(_atualizarFuncsDeTodos, 60000);
+// ===== fim =====
 </script>
 </body>
 </html>
