@@ -2164,6 +2164,10 @@ if(Object.keys(escalaLocal).length===0 && temSync()){
 showPage(_lojaMode?'escala':'dashboard');
 // Reenvia alterações que não chegaram à planilha
 setTimeout(()=>{Object.keys(_pend).forEach(g=>{const [f,y,m]=g.split('__');agendarEnvio(f,+y,+m,500);});},3000);
+  setTimeout(()=>{Object.keys(_pend).forEach(g=>{const [f,y,m]=g.split('__');agendarEnvio(f,+y,+m,500);});},3000);
+   </script>
+   </body>
+   </html>
 </script>
 </body>
 </html>
